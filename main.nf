@@ -16,41 +16,14 @@ nextflow.enable.dsl=2
 // params {
 params.genomeref           = "/staging/leuven/stg_00002/lcb/jdemeul/reference/GCF_000001215.4_Release_6_plus_ISO1_MT_genomic.fasta"
 params.genomerefindex      = "${file(params.genomeref).getParent()}/${file(params.genomeref).getBaseName()}_map-ont.mmi"
-params.fastqs              = "/staging/leuven/stg_00002/lcb/jdemeul/projects/2020_fiberseq/data/20210503_S2_2folddilser_100kto3k_nano-gTag/20210503_1530_MN34250_AGI654_ad1ed051/fastq_pass/barcode06/"
+// params.fastqs              = "/staging/leuven/stg_00002/lcb/jdemeul/projects/2020_fiberseq/data/20210503_S2_2folddilser_100kto3k_nano-gTag/20210503_1530_MN34250_AGI654_ad1ed051/fastq_pass/barcode06/"
+params.fastqs              = "/staging/leuven/stg_00002/lcb/jdemeul/projects/2020_fiberseq/results/20210803_S2attP_Fiber-seq_DiMeLo-opt/"
 params.guppy_gpu           = true
 params.sampleid            = "ASA_Edin_BA24_14_18"
 params.outdir              = "/staging/leuven/stg_00002/lcb/jdemeul/projects/2021_ASAP/data/mapped/${params.sampleid}"
 params.tracedir            = "${params.outdir}/pipeline_info"
-params.cutesv_min_support  = 10
-
+params.cutesv_min_support  = 3
 // }
-
-// ch_reference_fasta = Channel.fromPath( params.genomeref, checkIfExists: true )
-// ch_fastqs = Channel.fromPath( params.fastqs )
-
-// ch_fastqs.view()
-// ch_reference_index = Channel.fromPath( params.genomerefindex, checkIfExists: true )
-
-println "$params.genomerefindex"
-
-// /* 
-// * use an existing minimap2 index
-// */
-// process use_existing_minimap_index {
-    
-//     when:
-//     file(params.genomerefindex).exists()
-
-//     output:
-//     path 'index' // into ch_old_reference_index
-
-//     script:
-//     """
-//     cp ${params.genomerefindex} index
-//     """
-
-// }
-
 
 /* 
 * index a reference genome with minimap2
@@ -59,6 +32,11 @@ process create_minimap_index {
     // tag "$genomeref"
     label 'process_medium'
     label 'minimap'
+
+    // publishDir path: '.', mode: 'copy',
+    //     saveAs: { "${file(params.genomerefindex)}" }
+    publishDir path: "${file(params.genomerefindex).getParent()}", mode: 'copy'
+        // saveAs: { "${file(params.genomerefindex)}" }
 
     // when:
     // !file(params.genomerefindex).exists()
@@ -69,11 +47,6 @@ process create_minimap_index {
 
     output:
     path "*.mmi", emit: refindex // into ch_new_reference_index
-
-    // publishDir path: '.', mode: 'copy',
-    //     saveAs: { "${file(params.genomerefindex)}" }
-    publishDir path: "${file(params.genomerefindex).getParent()}", mode: 'copy'
-        // saveAs: { "${file(params.genomerefindex)}" }
 
     script:
     // if ( !file(params.genomerefindex).exists() )
@@ -110,12 +83,17 @@ process minimap_alignment {
 
 
 /* 
-* index a reference genome with minimap2
+* index a reference genome with LRA
 */
 process create_lra_index {
     // tag "$genomeref"
     label 'process_medium'
     label 'lra'
+
+    // publishDir path: '.', mode: 'copy',
+    //     saveAs: { "${file(params.genomerefindex)}" }
+    publishDir path: "${file(params.genomerefindex).getParent()}", mode: 'copy'
+        // saveAs: { "${file(params.genomerefindex)}" }
 
     input:
     path genomeref // from ch_reference_fasta
@@ -123,11 +101,6 @@ process create_lra_index {
     output:
     path "*.gli" // into ch_new_reference_index
     path "*.mmi" // into ch_new_reference_index
-
-    // publishDir path: '.', mode: 'copy',
-    //     saveAs: { "${file(params.genomerefindex)}" }
-    publishDir path: "${file(params.genomerefindex).getParent()}", mode: 'copy'
-        // saveAs: { "${file(params.genomerefindex)}" }
 
     script:
     """
@@ -164,15 +137,16 @@ process sam_to_sorted_bam {
     label 'process_medium'
     label 'samtools'
 
+    publishDir path: "./results/", mode: 'copy'
+
     input:
     path mapped_sam
     path genomeref
 
     output:
-    path "*.bam"
-    path "*.bai"
-
-    publishDir path: "./results/", mode: 'copy'
+    path "*.bam", emit: sorted_bam
+    path "*.bai", emit: bam_index
+    path "*stats", emit bam_stats
 
     script:
     def samtools_mem = Math.floor(task.memory.getMega() / task.cpus ) as int
@@ -192,20 +166,57 @@ process sam_to_sorted_bam {
 
 
 /* 
+* sam to bam conversion using samtools (LRA version)
+*/
+process sam_to_sorted_bam_lra {
+    label 'process_medium'
+    label 'samtools'
+
+    // don't output the LRA aligned bam
+    // publishDir path: "./results/", mode: 'copy'
+
+    input:
+    path mapped_sam
+    path genomeref
+
+    output:
+    path "*.bam", emit: sorted_bam
+    path "*.bai", emit: bam_index
+    // path "*stats", emit bam_stats
+
+    script:
+    def samtools_mem = Math.floor(task.memory.getMega() / task.cpus ) as int
+    """
+    samtools sort -@ $task.cpus \
+        --write-index \
+        -o ${params.sampleid}.bam##idx##${params.sampleid}.bam.bai \
+        -m ${samtools_mem}M \
+        --reference $genomeref \
+        $mapped_sam
+    // samtools flagstat ${params.sampleid}.bam > ${params.sampleid}.bam.flagstat
+    // samtools idxstats ${params.sampleid}.bam > ${params.sampleid}.bam.idxstats
+    // samtools stats ${params.sampleid}.bam > ${params.sampleid}.bam.stats
+    """
+
+}
+
+
+/* 
 * SV calling on the LRA bam using cuteSV
 */
 process cutesv_sv_calling {
     label 'process_high'
     label 'cutesv'
 
+    publishDir path: "./results/", mode: 'copy'
+
     input:
     path sorted_bam
+    path bam_index
     path genomeref
 
     output:
     path "*.vcf", emit: sv_calls
-
-    publishDir path: "./results/", mode: 'copy'
 
     script:
     """
@@ -227,6 +238,38 @@ process cutesv_sv_calling {
 }
 
 
+/* 
+* SNV calling on the minimap2 aligned bam using PEPPER-Margin-DeepVariant
+*/
+process deepvariant_snv_calling {
+    label 'process_high'
+    label 'deepvariant'
+
+    publishDir path: "./results/", mode: 'copy'
+
+    input:
+    path sorted_bam
+    path bam_index
+    path genomeref
+
+    output:
+    path "snv", emit: snv_out
+
+    script:
+    """
+    run_pepper_margin_deepvariant call_variant \
+        -b $sorted_bam \
+        -f $genomeref \
+        -o snv \
+        -p ${params.sampleid}
+        -t $task.cpus
+        --ont
+        --phased_outputs
+    """
+
+}
+
+
 
 
 // }
@@ -235,15 +278,20 @@ workflow minimap_alignment_snv_calling {
     genomeref = Channel.fromPath( params.genomeref, checkIfExists: true  )
     fastqs = Channel.fromPath( params.fastqs )
     
+    // genome indexing
     if ( !file(params.genomerefindex).exists() ) {
         create_minimap_index( genomeref )
         genomeindex = create_minimap_index.out.refindex
     } else {
         genomeindex = Channel.fromPath( params.genomerefindex )
     }
-    
+
+    // alignment and covnersion into indexed sorted bam
     minimap_alignment( genomeindex, fastqs )
     sam_to_sorted_bam( minimap_alignment.out.mapped_sam, genomeref )
+
+    // SNV calling using PEPPER-margin-DeepVariant
+    deepvariant_snv_calling( sam_to_sorted_bam.out.sorted_bam, sam_to_sorted_bam.out.bam_index, genomeref )
 
 }
 
@@ -251,21 +299,24 @@ workflow lra_alignment_sv_calling {
     genomeref = Channel.fromPath( params.genomeref, checkIfExists: true  )
     fastqs = Channel.fromPath( params.fastqs )
 
+    // genome indexing
     if ( !file("${params.genomeref}.gli").exists() ) {
         create_lra_index( genomeref )
     } 
+
+    // alignment and covnersion into indexed sorted bam
     lra_alignment( genomeref, fastqs )
-    sam_to_sorted_bam( lra_alignment.out.mapped_sam, genomeref )
-    cutesv_sv_calling( sam_to_sorted_bam.out.mapped_bam[0], genomeref )
-    
-    // minimap_alignment( genomeindex, fastqs )
-    // sam_to_sorted_bam( minimap_alignment.out.mapped_sam, genomeref )
+    sam_to_sorted_bam_lra( lra_alignment.out.mapped_sam, genomeref )
+
+    // SV calling using cuteSV
+    cutesv_sv_calling( sam_to_sorted_bam.out.sorted_bam, sam_to_sorted_bam.out.bam_index, genomeref )
 
 }
 
 workflow {
     
-    lra_alignment_sv_calling()
+    // lra_alignment_sv_calling()
+    minimap_alignment_snv_calling()
 
 }
 
