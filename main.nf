@@ -14,15 +14,17 @@ nextflow.enable.dsl=2
  * pipeline input parameters 
  */
 // params {
-params.genomeref           = "/staging/leuven/stg_00002/lcb/jdemeul/reference/GCF_000001215.4_Release_6_plus_ISO1_MT_genomic.fasta"
+params.genomeref           = "/staging/leuven/stg_00002/lcb/jdemeul/reference/chm13_v1.1_chr20.fasta"
 params.genomerefindex      = "${file(params.genomeref).getParent()}/${file(params.genomeref).getBaseName()}_map-ont.mmi"
 // params.fastqs              = "/staging/leuven/stg_00002/lcb/jdemeul/projects/2020_fiberseq/data/20210503_S2_2folddilser_100kto3k_nano-gTag/20210503_1530_MN34250_AGI654_ad1ed051/fastq_pass/barcode06/"
-params.fastqs              = "/staging/leuven/stg_00002/lcb/jdemeul/projects/2020_fiberseq/results/20210803_S2attP_Fiber-seq_DiMeLo-opt/"
+params.fastqs              = "/staging/leuven/stg_00002/lcb/jdemeul/projects/2021_ASAP/data/raw/testsample/fastq_pass/"
 params.guppy_gpu           = true
-params.sampleid            = "ASA_Edin_BA24_14_18"
+params.sampleid            = "ASA_Edin_BA24_14_18_chr20"
 params.outdir              = "/staging/leuven/stg_00002/lcb/jdemeul/projects/2021_ASAP/data/mapped/${params.sampleid}"
 params.tracedir            = "${params.outdir}/pipeline_info"
-params.cutesv_min_support  = 3
+params.cutesv_min_support  = 8
+params.megalodon_model     = "res_dna_r941_min_modbases-all-context_v001.cfg"
+params.medaka_snp_model    = "r941_prom_sup_snp_g507"
 // }
 
 /* 
@@ -74,6 +76,7 @@ process minimap_alignment {
 
     output:
     path "mapped.sam", emit: mapped_sam
+    val "minimap2", emit: aligner
 
     script:
     """
@@ -122,6 +125,7 @@ process lra_alignment {
 
     output:
     path "mapped.sam", emit: mapped_sam
+    val "lra", emit: aligner
 
     script:
     """
@@ -137,65 +141,31 @@ process sam_to_sorted_bam {
     label 'process_medium'
     label 'samtools'
 
-    publishDir path: "./results/", mode: 'copy'
+    publishDir path: "./results/", mode: 'copy',
+               saveAs: { item -> item.matches("(.*)minimap2(.*)") ? item : null }
 
     input:
     path mapped_sam
     path genomeref
+    val aligner
 
     output:
     path "*.bam", emit: sorted_bam
     path "*.bai", emit: bam_index
-    path "*stats", emit bam_stats
+    path "*stats"
 
     script:
     def samtools_mem = Math.floor(task.memory.getMega() / task.cpus ) as int
     """
     samtools sort -@ $task.cpus \
         --write-index \
-        -o ${params.sampleid}.bam##idx##${params.sampleid}.bam.bai \
+        -o ${params.sampleid}_${aligner}.bam##idx##${params.sampleid}_${aligner}.bam.bai \
         -m ${samtools_mem}M \
         --reference $genomeref \
         $mapped_sam
-    samtools flagstat ${params.sampleid}.bam > ${params.sampleid}.bam.flagstat
-    samtools idxstats ${params.sampleid}.bam > ${params.sampleid}.bam.idxstats
-    samtools stats ${params.sampleid}.bam > ${params.sampleid}.bam.stats
-    """
-
-}
-
-
-/* 
-* sam to bam conversion using samtools (LRA version)
-*/
-process sam_to_sorted_bam_lra {
-    label 'process_medium'
-    label 'samtools'
-
-    // don't output the LRA aligned bam
-    // publishDir path: "./results/", mode: 'copy'
-
-    input:
-    path mapped_sam
-    path genomeref
-
-    output:
-    path "*.bam", emit: sorted_bam
-    path "*.bai", emit: bam_index
-    // path "*stats", emit bam_stats
-
-    script:
-    def samtools_mem = Math.floor(task.memory.getMega() / task.cpus ) as int
-    """
-    samtools sort -@ $task.cpus \
-        --write-index \
-        -o ${params.sampleid}.bam##idx##${params.sampleid}.bam.bai \
-        -m ${samtools_mem}M \
-        --reference $genomeref \
-        $mapped_sam
-    // samtools flagstat ${params.sampleid}.bam > ${params.sampleid}.bam.flagstat
-    // samtools idxstats ${params.sampleid}.bam > ${params.sampleid}.bam.idxstats
-    // samtools stats ${params.sampleid}.bam > ${params.sampleid}.bam.stats
+    samtools flagstat ${params.sampleid}_${aligner}.bam > ${params.sampleid}_${aligner}.bam.flagstat
+    samtools idxstats ${params.sampleid}_${aligner}.bam > ${params.sampleid}_${aligner}.bam.idxstats
+    samtools stats ${params.sampleid}_${aligner}.bam > ${params.sampleid}_${aligner}.bam.stats
     """
 
 }
@@ -253,22 +223,135 @@ process deepvariant_snv_calling {
     path genomeref
 
     output:
-    path "snv", emit: snv_out
+    path "*.vcf.gz", emit: indel_snv_vcf
+    path "*.vcf.gz.tbi", emit: indel_snv_vcf_index
+    path "logs"
+    path "intermediate_files"
+    path "*.visual_report.html"
 
     script:
     """
     run_pepper_margin_deepvariant call_variant \
         -b $sorted_bam \
         -f $genomeref \
-        -o snv \
-        -p ${params.sampleid}
-        -t $task.cpus
-        --ont
+        -o . \
+        -p ${params.sampleid} \
+        -t $task.cpus \
+        --ont \
         --phased_outputs
     """
 
 }
 
+
+/* 
+* SNV calling on the minimap2 aligned bam using PEPPER-Margin-DeepVariant
+*/
+process medaka_snv_calling {
+    label 'process_high'
+    label 'medaka'
+
+    publishDir path: "./results/", mode: 'copy'
+
+    input:
+    path sorted_bam
+    path bam_index
+    path genomeref
+
+    output:
+    path "medaka_variant", emit: medaka_variant
+
+    script:
+    """
+    export CUDA_VISIBLE_DEVICES=2
+    medaka_variant \
+        -i $sorted_bam \
+        -f $genomeref \
+        -t $task.cpus \
+        -s ${params.medaka_snp_model}
+        -m ${params.medaka_snp_model.replace("snp", "variant")}
+        -b 150 \
+        -o medaka_variant \
+        -p 
+    """
+
+}
+
+
+/* 
+* SNV calling on the minimap2 aligned bam using PEPPER-Margin-DeepVariant
+*/
+process variant_filtering {
+    label 'process_high'
+    label 'deepvariant'
+
+    publishDir path: "./results/", mode: 'copy'
+
+    input:
+    path sorted_bam
+    path bam_index
+    path genomeref
+
+    output:
+    path "*.vcf.gz", emit: indel_snv_vcf
+    path "*.vcf.gz.tbi", emit: indel_snv_vcf_index
+    path "logs"
+    path "intermediate_files"
+    path "*.visual_report.html"
+
+    script:
+    """
+    run_pepper_margin_deepvariant call_variant \
+        -b $sorted_bam \
+        -f $genomeref \
+        -o . \
+        -p ${params.sampleid} \
+        -t $task.cpus \
+        --ont \
+        --phased_outputs
+    """
+
+}
+
+
+/* 
+* SNV calling on the minimap2 aligned bam using PEPPER-Margin-DeepVariant
+*/
+process megalodon_modifications {
+    label 'process_high'
+    label 'megalodon'
+
+    publishDir path: "./results/", mode: 'copy'
+
+    input:
+    path reads
+    path variants
+    path genomeref
+
+    output:
+    path "mod_mappings_sort.bam", emit: mod_basecalls
+
+    script:
+    """
+    megalodon \
+        --devices "cuda:4" \
+        --processes $task.cpus \
+        --guppy-server-path /opt/ont/ont-guppy/bin/guppy_basecall_server \
+        --guppy-params "-d /staging/leuven/stg_00002/lcb/jdemeul/software/rerio/basecall_models/" \
+        --guppy-config ${params.megalodon_model} \
+        --reference $genomeref \
+        --outputs basecalls mod_basecalls mappings mod_mappings per_read_mods mods \
+        --mappings-format bam \
+        --overwrite \
+        --sort-mappings \
+        --write-mods-text \
+        --mod-motif Y A 0 \
+        --mod-motif Z CG 0 \
+        --output-directory /staging/leuven/stg_00002/lcb/jdemeul/projects/2020_fiberseq/results/20210328_MouseBrain_Hia5_megalodon/ \
+        /staging/leuven/stg_00002/lcb/jdemeul/projects/2020_fiberseq/data/20210326_1208_MN34250_FAP14858_0224c788/
+    """
+
+}
 
 
 
@@ -288,7 +371,7 @@ workflow minimap_alignment_snv_calling {
 
     // alignment and covnersion into indexed sorted bam
     minimap_alignment( genomeindex, fastqs )
-    sam_to_sorted_bam( minimap_alignment.out.mapped_sam, genomeref )
+    sam_to_sorted_bam( minimap_alignment.out.mapped_sam, genomeref, minimap_alignment.out.aligner )
 
     // SNV calling using PEPPER-margin-DeepVariant
     deepvariant_snv_calling( sam_to_sorted_bam.out.sorted_bam, sam_to_sorted_bam.out.bam_index, genomeref )
@@ -306,7 +389,7 @@ workflow lra_alignment_sv_calling {
 
     // alignment and covnersion into indexed sorted bam
     lra_alignment( genomeref, fastqs )
-    sam_to_sorted_bam_lra( lra_alignment.out.mapped_sam, genomeref )
+    sam_to_sorted_bam( lra_alignment.out.mapped_sam, genomeref, lra_alignment.out.aligner )
 
     // SV calling using cuteSV
     cutesv_sv_calling( sam_to_sorted_bam.out.sorted_bam, sam_to_sorted_bam.out.bam_index, genomeref )
@@ -315,7 +398,7 @@ workflow lra_alignment_sv_calling {
 
 workflow {
     
-    // lra_alignment_sv_calling()
+    lra_alignment_sv_calling()
     minimap_alignment_snv_calling()
 
 }
