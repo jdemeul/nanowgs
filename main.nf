@@ -17,15 +17,84 @@ nextflow.enable.dsl=2
 params.genomeref           = "/staging/leuven/stg_00002/lcb/jdemeul/reference/chm13_v1.1_chr20.fasta"
 params.genomerefindex      = "${file(params.genomeref).getParent()}/${file(params.genomeref).getBaseName()}_map-ont.mmi"
 // params.fastqs              = "/staging/leuven/stg_00002/lcb/jdemeul/projects/2020_fiberseq/data/20210503_S2_2folddilser_100kto3k_nano-gTag/20210503_1530_MN34250_AGI654_ad1ed051/fastq_pass/barcode06/"
-params.fastqs              = "/staging/leuven/stg_00002/lcb/jdemeul/projects/2021_ASAP/data/raw/testsample/fastq_pass/"
+params.ont_base_dir        = "/staging/leuven/stg_00002/lcb/jdemeul/projects/2021_ASAP/data/raw/testsample/20210719_ASA_Edin_BA24_14_18/"
 params.guppy_gpu           = true
+params.min_read_qscore     = 10
 params.sampleid            = "ASA_Edin_BA24_14_18_chr20"
 params.outdir              = "/staging/leuven/stg_00002/lcb/jdemeul/projects/2021_ASAP/data/mapped/${params.sampleid}"
 params.tracedir            = "${params.outdir}/pipeline_info"
 params.cutesv_min_support  = 8
 params.megalodon_model     = "res_dna_r941_min_modbases-all-context_v001.cfg"
 params.medaka_snp_model    = "r941_prom_sup_snp_g507"
+params.guppy_config        = "dna_r9.4.1_450bps_sup_prom.cfg"
+// params.rerio_base          = "/staging/leuven/stg_00002/lcb/jdemeul/software/rerio/basecall_models/"
+// params.guppy_barcode_kit   = "/staging/leuven/stg_00002/lcb/jdemeul/software/rerio/basecall_models/"
+params.with_gpu            = true
+params.gpu_devices         = "3"
+params.rebasecall          = false
 // }
+
+
+/* 
+* Basecall reads
+*/
+process basecall_reads {
+    label 'process_middle'
+    label 'guppy'
+    label ( params.with_gpu ? 'with_gpus': null )
+
+    input:
+    path ont_base
+    path genomeref
+    path genomerefidx
+
+    output:
+    path "basecalls", emit: fastqdir
+
+    script:
+    """
+    guppy_basecaller \
+        -i $ont_base \
+        -s basecalls \
+        -c ${params.guppy_config} \
+        --recursive \
+        --device "cuda:${params.gpu_devices}" \
+        --align_ref $genomeref \
+        --compress_fastq \
+        --disable_qscore_filtering
+    """
+}
+
+
+
+/* 
+* Process fastq files
+*/
+process filter_reads {
+    label 'process_medium'
+    label 'fastp'
+
+    publishDir path: "./results/fastq/", mode: 'copy'
+
+    input:
+    path fastqbase
+
+    output:
+    path "*_trimmed.fastq.gz", emit: fastq
+
+    script:
+    """
+    zcat ${fastqbase}/*.fastq.gz | fastp --stdin \
+        --disable_adapter_trimming \
+        --average_qual ${params.min_read_qscore} --qualified_quality_phred 0 --unqualified_percent_limit 100 --n_base_limit 50 \
+        --length_required 100 \
+        --trim_front1 30 --trim_tail1 15 \
+        -o ${params.sampleid}_trimmed.fastq.gz \
+        --thread $task.cpus 
+    """
+}
+
+
 
 /* 
 * index a reference genome with minimap2
@@ -80,7 +149,7 @@ process minimap_alignment {
 
     script:
     """
-    minimap2 -ax map-ont -t $task.cpus -L --secondary=no $index ${reads}/* > mapped.sam
+    minimap2 -ax map-ont -t $task.cpus -L --secondary=no $index ${reads} > mapped.sam
     """
 }
 
@@ -129,7 +198,7 @@ process lra_alignment {
 
     script:
     """
-    zcat ${reads}/*.fastq.gz | lra align -ONT -p s -t $task.cpus $genomeref /dev/stdin > mapped.sam
+    zcat ${reads} | lra align -ONT -p s -t $task.cpus $genomeref /dev/stdin > mapped.sam
     """
 }
 
@@ -141,7 +210,7 @@ process sam_to_sorted_bam {
     label 'process_medium'
     label 'samtools'
 
-    publishDir path: "./results/", mode: 'copy',
+    publishDir path: "./results/bam/", mode: 'copy',
                saveAs: { item -> item.matches("(.*)minimap2(.*)") ? item : null }
 
     input:
@@ -178,7 +247,7 @@ process cutesv_sv_calling {
     label 'process_high'
     label 'cutesv'
 
-    publishDir path: "./results/", mode: 'copy'
+    publishDir path: "./results/svs/", mode: 'copy'
 
     input:
     path sorted_bam
@@ -195,7 +264,11 @@ process cutesv_sv_calling {
         --max_cluster_bias_INS 100 \
         --diff_ratio_merging_INS 0.3 \
         --max_cluster_bias_DEL 100 \
-        --diff_ratio_merging_DE 0.3 \
+        --diff_ratio_merging_DEL 0.3 \
+        --max_cluster_bias_INV 500 \
+        --max_cluster_bias_DUP 500 \
+        --max_cluster_bias_TRA 50 \
+        --diff_ratio_filtering_TRA 0.6 \
         --genotype \
         --sample ${params.sampleid} \
         --threads $task.cpus \
@@ -215,7 +288,7 @@ process deepvariant_snv_calling {
     label 'process_high'
     label 'deepvariant'
 
-    publishDir path: "./results/", mode: 'copy'
+    publishDir path: "./results/snv_indel_deepvariant/", mode: 'copy'
 
     input:
     path sorted_bam
@@ -238,7 +311,7 @@ process deepvariant_snv_calling {
         -p ${params.sampleid} \
         -t $task.cpus \
         --ont \
-        --phased_outputs
+        --phased_output
     """
 
 }
@@ -250,8 +323,9 @@ process deepvariant_snv_calling {
 process medaka_snv_calling {
     label 'process_high'
     label 'medaka'
+    label (${params.with_gpu} ? 'with_gpu': null)
 
-    publishDir path: "./results/", mode: 'copy'
+    publishDir path: "./results/snv_indel_medaka/", mode: 'copy'
 
     input:
     path sorted_bam
@@ -263,14 +337,15 @@ process medaka_snv_calling {
 
     script:
     """
-    export CUDA_VISIBLE_DEVICES=2
+    export SINGULARITYENV_CUDA_VISIBLE_DEVICES=${params.gpu_devices}
     medaka_variant \
         -i $sorted_bam \
         -f $genomeref \
         -t $task.cpus \
-        -s ${params.medaka_snp_model}
-        -m ${params.medaka_snp_model.replace("snp", "variant")}
         -b 150 \
+        -n ${params.sampleid} \
+        -s ${params.medaka_snp_model} \
+        -m ${params.medaka_snp_model.replace("snp", "variant")} \
         -o medaka_variant \
         -p 
     """
@@ -283,14 +358,49 @@ process medaka_snv_calling {
 */
 process variant_filtering {
     label 'process_high'
-    label 'deepvariant'
+    label 'bcftools'
 
     publishDir path: "./results/", mode: 'copy'
+    // ,
+        // saveAs: { item -> 
+        //                 if ( item.matches("(.*)lra(.*)" ) {
+        //                     "/svs/" + item
+        //                 } else if item.matches("(.*)medaka(.*)" ) {
+        //                     "/snvs_indel_medaka/" + item
+        //                 } else {
+        //                     "/snvs_indel/" + item
+        //                 }}
 
     input:
+    path variants
+
+    output:
+    path "*_PASS.vcf", emit: variants_pass
+
+    script:
+    """
+    bcftools view -f "PASS" -o ${variants.getSimpleName()}_PASS.vcf $variants
+    """
+}
+
+
+/* 
+* SNV calling on the minimap2 aligned bam using PEPPER-Margin-DeepVariant
+*/
+process create_personal_genome {
+    label 'process_low'
+    label 'deepvariant'
+
+    publishDir path: "./results/crossstitch", mode: 'copy'
+
+    input:
+    path phased_snps
+    path unphased_svs
     path sorted_bam
     path bam_index
     path genomeref
+    val karyotype
+    val refine
 
     output:
     path "*.vcf.gz", emit: indel_snv_vcf
@@ -301,6 +411,11 @@ process variant_filtering {
 
     script:
     """
+    export XDG_CONFIG_HOME="/staging/leuven/stg_00002/lcb/jdemeul/software/"
+    module use /staging/leuven/stg_00002/lcb/jdemeul/software/easybuild/modules/all/
+    ml --ignore-cache Java/13.0.2 SAMtools/1.9-GCC-6.4.0-2.28 HTSlib/1.9-GCC-6.4.0-2.28 pigz/2.6-GCCcore-6.4.0 Racon/1.4.13-GCCcore-9.3.0
+    /staging/leuven/stg_00002/lcb/jdemeul/software/crossstitch/src/crossstitch.sh  \
+        /staging/leuven/stg_00002/lcb/jdemeul/projects/2021_ASAP/code/nanowgs/results/ASA_Edin_BA24_14_18_chr20.phased_PASS.vcf /staging/leuven/stg_00002/lcb/jdemeul/projects/2021_ASAP/code/nanowgs/results/ASA_Edin_BA24_14_18_chr20_LRA_cuteSV_svs_PASS.vcf /staging/leuven/stg_00002/lcb/jdemeul/projects/2021_ASAP/code/nanowgs/results/ASA_Edin_BA24_14_18_chr20_minimap2.bam /staging/leuven/stg_00002/lcb/jdemeul/reference/chm13_v1.1_chr20.fasta ASA_Edin_BA24_14_18_chr20 xy 1
     run_pepper_margin_deepvariant call_variant \
         -b $sorted_bam \
         -f $genomeref \
@@ -308,9 +423,8 @@ process variant_filtering {
         -p ${params.sampleid} \
         -t $task.cpus \
         --ont \
-        --phased_outputs
+        --phased_output
     """
-
 }
 
 
@@ -320,6 +434,7 @@ process variant_filtering {
 process megalodon_modifications {
     label 'process_high'
     label 'megalodon'
+    label (${params.with_gpu} ? 'with_gpu': null)
 
     publishDir path: "./results/", mode: 'copy'
 
@@ -332,74 +447,118 @@ process megalodon_modifications {
     path "mod_mappings_sort.bam", emit: mod_basecalls
 
     script:
-    """
-    megalodon \
-        --devices "cuda:4" \
-        --processes $task.cpus \
-        --guppy-server-path /opt/ont/ont-guppy/bin/guppy_basecall_server \
-        --guppy-params "-d /staging/leuven/stg_00002/lcb/jdemeul/software/rerio/basecall_models/" \
-        --guppy-config ${params.megalodon_model} \
-        --reference $genomeref \
-        --outputs basecalls mod_basecalls mappings mod_mappings per_read_mods mods \
-        --mappings-format bam \
-        --overwrite \
-        --sort-mappings \
-        --write-mods-text \
-        --mod-motif Y A 0 \
-        --mod-motif Z CG 0 \
-        --output-directory /staging/leuven/stg_00002/lcb/jdemeul/projects/2020_fiberseq/results/20210328_MouseBrain_Hia5_megalodon/ \
-        /staging/leuven/stg_00002/lcb/jdemeul/projects/2020_fiberseq/data/20210326_1208_MN34250_FAP14858_0224c788/
-    """
+    if ( ${params.with_gpu} ) 
+        """
+        export SINGULARITYENV_CUDA_VISIBLE_DEVICES=${params.gpu_devices}
+        megalodon \
+            --devices "cuda:all" \
+            --processes $task.cpus \
+            --guppy-server-path /opt/ont/ont-guppy/bin/guppy_basecall_server \
+            --guppy-params "-d /staging/leuven/stg_00002/lcb/jdemeul/software/rerio/basecall_models/" \
+            --guppy-config ${params.megalodon_model} \
+            --reference $genomeref \
+            --outputs basecalls mod_basecalls mappings mod_mappings per_read_mods mods \
+            --mappings-format bam \
+            --overwrite \
+            --sort-mappings \
+            --write-mods-text \
+            --mod-motif Y A 0 \
+            --mod-motif Z CG 0 \
+            --output-directory /staging/leuven/stg_00002/lcb/jdemeul/projects/2020_fiberseq/results/20210328_MouseBrain_Hia5_megalodon/ \
+            /staging/leuven/stg_00002/lcb/jdemeul/projects/2020_fiberseq/data/20210326_1208_MN34250_FAP14858_0224c788/
+        """
+    else 
+        """
+        megalodon \
+            --processes $task.cpus \
+            --guppy-server-path /opt/ont/ont-guppy/bin/guppy_basecall_server \
+            --guppy-params "-d /staging/leuven/stg_00002/lcb/jdemeul/software/rerio/basecall_models/" \
+            --guppy-config ${params.megalodon_model} \
+            --reference $genomeref \
+            --outputs basecalls mod_basecalls mappings mod_mappings per_read_mods mods \
+            --mappings-format bam \
+            --overwrite \
+            --sort-mappings \
+            --write-mods-text \
+            --mod-motif Y A 0 \
+            --mod-motif Z CG 0 \
+            --output-directory /staging/leuven/stg_00002/lcb/jdemeul/projects/2020_fiberseq/results/20210328_MouseBrain_Hia5_megalodon/ \
+            /staging/leuven/stg_00002/lcb/jdemeul/projects/2020_fiberseq/data/20210326_1208_MN34250_FAP14858_0224c788/
+        """
+
 
 }
+
+
 
 
 
 // }
 
 workflow minimap_alignment_snv_calling {
-    genomeref = Channel.fromPath( params.genomeref, checkIfExists: true  )
-    fastqs = Channel.fromPath( params.fastqs )
-    
-    // genome indexing
-    if ( !file(params.genomerefindex).exists() ) {
-        create_minimap_index( genomeref )
-        genomeindex = create_minimap_index.out.refindex
-    } else {
-        genomeindex = Channel.fromPath( params.genomerefindex )
-    }
+    take: fastqs
+    main:
+        genomeref = Channel.fromPath( params.genomeref, checkIfExists: true  )
+        // fastqs = Channel.fromPath( params.fastqs )
+        
+        // genome indexing
+        if ( !file(params.genomerefindex).exists() ) {
+            create_minimap_index( genomeref )
+            genomeindex = create_minimap_index.out.refindex
+        } else {
+            genomeindex = Channel.fromPath( params.genomerefindex )
+        }
 
-    // alignment and covnersion into indexed sorted bam
-    minimap_alignment( genomeindex, fastqs )
-    sam_to_sorted_bam( minimap_alignment.out.mapped_sam, genomeref, minimap_alignment.out.aligner )
+        // alignment and covnersion into indexed sorted bam
+        minimap_alignment( genomeindex, fastqs )
+        sam_to_sorted_bam( minimap_alignment.out.mapped_sam, genomeref, minimap_alignment.out.aligner )
 
-    // SNV calling using PEPPER-margin-DeepVariant
-    deepvariant_snv_calling( sam_to_sorted_bam.out.sorted_bam, sam_to_sorted_bam.out.bam_index, genomeref )
+        // SNV calling using PEPPER-margin-DeepVariant
+        deepvariant_snv_calling( sam_to_sorted_bam.out.sorted_bam, sam_to_sorted_bam.out.bam_index, genomeref )
 
 }
 
 workflow lra_alignment_sv_calling {
-    genomeref = Channel.fromPath( params.genomeref, checkIfExists: true  )
-    fastqs = Channel.fromPath( params.fastqs )
+    take: fastqs
+    main:
+        genomeref = Channel.fromPath( params.genomeref, checkIfExists: true  )
+        // fastqs = Channel.fromPath( params.fastqs )
 
-    // genome indexing
-    if ( !file("${params.genomeref}.gli").exists() ) {
-        create_lra_index( genomeref )
-    } 
+        // genome indexing
+        if ( !file("${params.genomeref}.gli").exists() ) {
+            create_lra_index( genomeref )
+        } 
 
-    // alignment and covnersion into indexed sorted bam
-    lra_alignment( genomeref, fastqs )
-    sam_to_sorted_bam( lra_alignment.out.mapped_sam, genomeref, lra_alignment.out.aligner )
+        // alignment and conversion into indexed sorted bam
+        lra_alignment( genomeref, fastqs )
+        sam_to_sorted_bam( lra_alignment.out.mapped_sam, genomeref, lra_alignment.out.aligner )
 
-    // SV calling using cuteSV
-    cutesv_sv_calling( sam_to_sorted_bam.out.sorted_bam, sam_to_sorted_bam.out.bam_index, genomeref )
+        // SV calling using cuteSV
+        cutesv_sv_calling( sam_to_sorted_bam.out.sorted_bam, sam_to_sorted_bam.out.bam_index, genomeref )
 
 }
 
+
+workflow process_reads {
+
+    if ( params.rebasecall ) {
+        basecall_reads( Channel.fromPath( params.ont_base_dir ), Channel.fromPath( params.genomeref ), Channel.fromPath( params.genomeref + ".mmi") )
+        filter_reads( basecall_reads.out.fastqdir )
+    } else {
+        filter_reads( Channel.fromPath( params.ont_base_dir + "/*/fastq_*/" ) )
+    }
+
+    emit:
+        fastq = filter_reads.out.fastq
+
+}
+
+
 workflow {
     
-    lra_alignment_sv_calling()
-    minimap_alignment_snv_calling()
+    process_reads()
+    // lra_alignment_sv_calling( process_reads.out.fastq )
+    // minimap_alignment_snv_calling( process_reads.out.fastq )
 
 }
 
