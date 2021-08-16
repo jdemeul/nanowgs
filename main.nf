@@ -14,8 +14,8 @@ nextflow.enable.dsl=2
  * pipeline input parameters 
  */
 // params {
-params.genomeref           = "/staging/leuven/stg_00002/lcb/jdemeul/reference/chm13_v1.1_chr20.fasta"
-params.genomerefindex      = "${file(params.genomeref).getParent()}/${file(params.genomeref).getBaseName()}_map-ont.mmi"
+params.genomeref           = "/staging/leuven/stg_00002/lcb/jdemeul/reference/chm13_v1.1_chr20/"
+// params.genomerefindex      = "${file(params.genomeref).getParent()}/${file(params.genomeref).getBaseName()}_map-ont.mmi"
 // params.fastqs              = "/staging/leuven/stg_00002/lcb/jdemeul/projects/2020_fiberseq/data/20210503_S2_2folddilser_100kto3k_nano-gTag/20210503_1530_MN34250_AGI654_ad1ed051/fastq_pass/barcode06/"
 params.ont_base_dir        = "/staging/leuven/stg_00002/lcb/jdemeul/projects/2021_ASAP/data/raw/testsample/20210719_ASA_Edin_BA24_14_18/"
 params.guppy_gpu           = true
@@ -43,13 +43,16 @@ process basecall_reads {
     label 'guppy'
     label ( params.with_gpu ? 'with_gpus': null )
 
+    publishDir path: "./results/basecalls/", mode: 'copy'
+
     input:
     path ont_base
     path genomeref
-    path genomerefidx
+    path genomrefidx
 
     output:
-    path "basecalls", emit: fastqdir
+    path "basecalls/*fastq.gz", emit: fastqs
+    path "basecalls/sequencing_summary.txt"
 
     script:
     """
@@ -77,14 +80,15 @@ process filter_reads {
     publishDir path: "./results/fastq/", mode: 'copy'
 
     input:
-    path fastqbase
+    path fastqs
 
     output:
-    path "*_trimmed.fastq.gz", emit: fastq
+    path "*_trimmed.fastq.gz", emit: fastq_trimmed
+    path "fastp*"
 
     script:
     """
-    zcat ${fastqbase}/*.fastq.gz | fastp --stdin \
+    zcat $fastqs | fastp --stdin \
         --disable_adapter_trimming \
         --average_qual ${params.min_read_qscore} --qualified_quality_phred 0 --unqualified_percent_limit 100 --n_base_limit 50 \
         --length_required 100 \
@@ -106,7 +110,7 @@ process create_minimap_index {
 
     // publishDir path: '.', mode: 'copy',
     //     saveAs: { "${file(params.genomerefindex)}" }
-    publishDir path: "${file(params.genomerefindex).getParent()}", mode: 'copy'
+    publishDir path: "${file(params.genomeref).getParent() + '/indexes/minimap2-ont/'}", mode: 'copy'
         // saveAs: { "${file(params.genomerefindex)}" }
 
     // when:
@@ -117,12 +121,12 @@ process create_minimap_index {
     path genomeref // from ch_reference_fasta
 
     output:
-    path "*.mmi", emit: refindex // into ch_new_reference_index
+    path "genome.mmi", emit: mmi // into ch_new_reference_index
 
     script:
     // if ( !file(params.genomerefindex).exists() )
     """
-    minimap2 -ax map-ont -t $task.cpus -d ${genomeref.getBaseName()}_map-ont.mmi $genomeref
+    minimap2 -ax map-ont -t $task.cpus -d genome.mmi $genomeref
     """
     // else 
     //     """
@@ -140,6 +144,7 @@ process minimap_alignment {
     label 'minimap'
 
     input:
+    path genomeref
     path index // from ch_old_reference_index.mix(ch_new_reference_index)
     path reads // from ch_fastqs
 
@@ -149,7 +154,7 @@ process minimap_alignment {
 
     script:
     """
-    minimap2 -ax map-ont -t $task.cpus -L --secondary=no $index ${reads} > mapped.sam
+    minimap2 -ax map-ont -t $task.cpus -L --secondary=no $genomeref ${reads} > mapped.sam
     """
 }
 
@@ -162,17 +167,14 @@ process create_lra_index {
     label 'process_medium'
     label 'lra'
 
-    // publishDir path: '.', mode: 'copy',
-    //     saveAs: { "${file(params.genomerefindex)}" }
-    publishDir path: "${file(params.genomerefindex).getParent()}", mode: 'copy'
-        // saveAs: { "${file(params.genomerefindex)}" }
+    publishDir path: "${file(params.genomeref).getParent() + '/indexes/lra-ont/'}", mode: 'copy'
 
     input:
     path genomeref // from ch_reference_fasta
 
     output:
-    path "*.gli" // into ch_new_reference_index
-    path "*.mmi" // into ch_new_reference_index
+    path "*.gli", emit: gli // into ch_new_reference_index
+    path "*.mmi", emit: mmi // into ch_new_reference_index
 
     script:
     """
@@ -191,6 +193,8 @@ process lra_alignment {
     path genomeref
     // path genomeindex
     path reads // from ch_fastqs
+    path gliidx
+    path mmiidx
 
     output:
     path "mapped.sam", emit: mapped_sam
@@ -231,8 +235,9 @@ process sam_to_sorted_bam {
         -o ${params.sampleid}_${aligner}.bam##idx##${params.sampleid}_${aligner}.bam.bai \
         -m ${samtools_mem}M \
         --reference $genomeref \
+        -T sorttmp_${params.sampleid}_${aligner} \
         $mapped_sam
-    samtools flagstat ${params.sampleid}_${aligner}.bam > ${params.sampleid}_${aligner}.bam.flagstat
+    samtools flagstat ${params.sampleid}_${aligner}.bam > ${params.sampleid}_${aligner}.bam.flagstats
     samtools idxstats ${params.sampleid}_${aligner}.bam > ${params.sampleid}_${aligner}.bam.idxstats
     samtools stats ${params.sampleid}_${aligner}.bam > ${params.sampleid}_${aligner}.bam.stats
     """
@@ -496,21 +501,23 @@ process megalodon_modifications {
 // }
 
 workflow minimap_alignment_snv_calling {
-    take: fastqs
+    take: 
+        fastqs
+        genomeref
     main:
-        genomeref = Channel.fromPath( params.genomeref, checkIfExists: true  )
+        // genomeref = Channel.fromPath( params.genomeref + "/fasta/genome.fa", checkIfExists: true  )
         // fastqs = Channel.fromPath( params.fastqs )
         
         // genome indexing
-        if ( !file(params.genomerefindex).exists() ) {
+        if ( !file( params.genomeref + "/indexes/minimap2-ont/genome.mmi" ).exists() ) {
             create_minimap_index( genomeref )
-            genomeindex = create_minimap_index.out.refindex
+            genomeindex = create_minimap_index.out.mmi
         } else {
-            genomeindex = Channel.fromPath( params.genomerefindex )
+            genomeindex = Channel.fromPath( params.genomeref + "/indexes/minimap2-ont/genome.mmi" )
         }
 
         // alignment and covnersion into indexed sorted bam
-        minimap_alignment( genomeindex, fastqs )
+        minimap_alignment( genomeref, genomeindex, fastqs )
         sam_to_sorted_bam( minimap_alignment.out.mapped_sam, genomeref, minimap_alignment.out.aligner )
 
         // SNV calling using PEPPER-margin-DeepVariant
@@ -519,18 +526,25 @@ workflow minimap_alignment_snv_calling {
 }
 
 workflow lra_alignment_sv_calling {
-    take: fastqs
+    take: 
+        fastqs
+        genomeref
     main:
-        genomeref = Channel.fromPath( params.genomeref, checkIfExists: true  )
+        // genomeref = Channel.fromPath( params.genomeref + "/fasta/genome.fa", checkIfExists: true  )
         // fastqs = Channel.fromPath( params.fastqs )
 
         // genome indexing
-        if ( !file("${params.genomeref}.gli").exists() ) {
+        if ( !file( params.genomeref + "/indexes/lra-ont/genome.fa.gli" ).exists() || !file( params.genomeref + "/indexes/lra-ont/genome.fa.mmi" ).exists() ) {
             create_lra_index( genomeref )
-        } 
+            genomeindex_gli = create_lra_index.out.gli
+            genomeindex_mmi = create_lra_index.out.mmi
+        } else {
+            genomeindex_gli = Channel.fromPath( params.genomeref + "/indexes/lra-ont/genome.fa.gli" )
+            genomeindex_mmi = Channel.fromPath( params.genomeref + "/indexes/lra-ont/genome.fa.mmi" )
+        }
 
         // alignment and conversion into indexed sorted bam
-        lra_alignment( genomeref, fastqs )
+        lra_alignment( genomeref, fastqs, genomeindex_gli, genomeindex_mmi )
         sam_to_sorted_bam( lra_alignment.out.mapped_sam, genomeref, lra_alignment.out.aligner )
 
         // SV calling using cuteSV
@@ -540,25 +554,41 @@ workflow lra_alignment_sv_calling {
 
 
 workflow process_reads {
+    take:
+        genomeref
+        ont_base
 
-    if ( params.rebasecall ) {
-        basecall_reads( Channel.fromPath( params.ont_base_dir ), Channel.fromPath( params.genomeref ), Channel.fromPath( params.genomeref + ".mmi") )
-        filter_reads( basecall_reads.out.fastqdir )
-    } else {
-        filter_reads( Channel.fromPath( params.ont_base_dir + "/*/fastq_*/" ) )
-    }
+    main:
+    
+        if ( params.rebasecall ) {
+
+            if ( !file( params.genomeref + "/indexes/minimap2-ont/genome.mmi" ).exists() ) {
+                create_minimap_index( genomeref )
+                genomeindex = create_minimap_index.out.mmi
+            } else {
+                genomeindex = Channel.fromPath( params.genomeref + "/indexes/minimap2-ont/genome.mmi" )
+            }
+
+            basecall_reads( Channel.fromPath( params.ont_base_dir ), genomeref, genomeindex )
+            filter_reads( basecall_reads.out.fastqs.collect() )
+        } else {
+            filter_reads( Channel.fromPath( params.ont_base_dir + "**.fastq.gz" ).collect() )
+        }
 
     emit:
-        fastq = filter_reads.out.fastq
+        fastq_trimmed = filter_reads.out.fastq_trimmed
 
 }
 
 
 workflow {
-    
-    process_reads()
-    // lra_alignment_sv_calling( process_reads.out.fastq )
-    // minimap_alignment_snv_calling( process_reads.out.fastq )
+
+    genomeref = Channel.fromPath( params.genomeref + "/fasta/genome.fa", checkIfExists: true  )
+    ont_base = Channel.fromPath( params.ont_base_dir, checkIfExists: true  )
+
+    process_reads( genomeref, ont_base )
+    lra_alignment_sv_calling( process_reads.out.fastq_trimmed, genomeref )
+    minimap_alignment_snv_calling( process_reads.out.fastq_trimmed, genomeref )
 
 }
 
