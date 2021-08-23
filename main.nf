@@ -23,7 +23,9 @@ params.min_read_qscore     = 10
 params.sampleid            = "ASA_Edin_BA24_14_18_chr20"
 params.outdir              = "/staging/leuven/stg_00002/lcb/jdemeul/projects/2021_ASAP/data/mapped/${params.sampleid}"
 params.tracedir            = "${params.outdir}/pipeline_info"
-params.cutesv_min_support  = 8
+params.sv_min_support      = 8
+params.sv_min_mapq         = 10
+params.sv_min_size         = 30
 params.megalodon_model     = "res_dna_r941_min_modbases-all-context_v001.cfg"
 params.medaka_snp_model    = "r941_prom_sup_snp_g507"
 params.guppy_config        = "dna_r9.4.1_450bps_sup_prom.cfg"
@@ -32,6 +34,8 @@ params.guppy_config        = "dna_r9.4.1_450bps_sup_prom.cfg"
 params.with_gpu            = true
 params.gpu_devices         = "3"
 params.rebasecall          = false
+params.processed_reads     = ""
+params.aligned_bam         = ""
 // }
 
 
@@ -126,7 +130,7 @@ process create_minimap_index {
     script:
     // if ( !file(params.genomerefindex).exists() )
     """
-    minimap2 -ax map-ont -t $task.cpus -d genome.mmi $genomeref
+    minimap2 -x map-ont -k 17 -t $task.cpus -d genome.mmi $genomeref
     """
     // else 
     //     """
@@ -153,8 +157,9 @@ process minimap_alignment {
     val "minimap2", emit: aligner
 
     script:
+    def samtools_mem = Math.floor(task.memory.getMega() / task.cpus ) as int
     """
-    minimap2 -ax map-ont -t $task.cpus -L --secondary=no $genomeref ${reads} > mapped.sam
+    minimap2 -ax map-ont -t $task.cpus -L --secondary=no --MD --cap-kalloc=500m -K 5g $genomeref ${reads} > mapped.sam
     """
 }
 
@@ -246,13 +251,13 @@ process sam_to_sorted_bam {
 
 
 /* 
-* SV calling on the LRA bam using cuteSV
+* SV calling on a bam file using cuteSV
 */
 process cutesv_sv_calling {
     label 'process_high'
     label 'cutesv'
 
-    publishDir path: "./results/svs/", mode: 'copy'
+    publishDir path: "./results/svs_cutesv/", mode: 'copy'
 
     input:
     path sorted_bam
@@ -260,11 +265,12 @@ process cutesv_sv_calling {
     path genomeref
 
     output:
-    path "*.vcf", emit: sv_calls
+    path "*_cuteSV_svs.vcf", emit: sv_calls
 
     script:
     """
-    cuteSV --min_support ${params.cutesv_min_support} \
+    cuteSV --min_support ${params.sv_min_support} \
+        --min_mapq ${params.sv_min_mapq} \
         --report_readid \
         --max_cluster_bias_INS 100 \
         --diff_ratio_merging_INS 0.3 \
@@ -275,15 +281,104 @@ process cutesv_sv_calling {
         --max_cluster_bias_TRA 50 \
         --diff_ratio_filtering_TRA 0.6 \
         --genotype \
+        --min_size ${params.sv_min_size} \
         --sample ${params.sampleid} \
         --threads $task.cpus \
         $sorted_bam \
         $genomeref \
-        ${params.sampleid}_LRA_cuteSV_svs.vcf \
+        ${params.sampleid}_cuteSV_svs.vcf \
         `pwd`
     """
 
 }
+
+
+/* 
+* SV calling on a bam file using Sniffles
+*/
+process sniffles_sv_calling {
+    label 'process_high'
+    label 'sniffles'
+
+    publishDir path: "./results/svs_sniffles/", mode: 'copy'
+
+    input:
+    path sorted_bam
+    path bam_index
+
+    output:
+    path "*_sniffles_svs.vcf", emit: sv_calls
+
+    script:
+    """
+    sniffles --minmapping_qual ${params.sv_min_mapq} \
+        --min_support ${params.sv_min_support} \
+        --cluster \
+        --min_length ${params.sv_min_size} \
+        --num_reads_report -1 \
+        --threads $task.cpus \
+        --tmp_file working_dir \
+        -m $sorted_bam \
+        -v ${params.sampleid}_sniffles_svs.vcf
+    """
+
+}
+
+
+/* 
+* SV calling on a bam file using SVIM
+*/
+process svim_sv_calling {
+    label 'process_low'
+    label 'svim'
+
+    publishDir path: "./results/svs_svim/", mode: 'copy'
+
+    input:
+    path sorted_bam
+    path bam_index
+    path genomeref
+
+    output:
+    path "working_dir/*.vcf", emit: sv_calls
+    path "working_dir/*.png"
+
+    script:
+    """
+    svim alignment \
+        --min_mapq ${params.sv_min_mapq} \
+        --min_sv_size ${params.sv_min_size} \
+        --sample ${params.sampleid} \
+        --read_names \
+        working_dir \
+        $sorted_bam \
+        $genomeref
+    """
+
+}
+
+
+/* 
+* SNV calling on the minimap2 aligned bam using PEPPER-Margin-DeepVariant
+*/
+process svim_sv_filtering {
+    label 'process_low'
+    label 'bcftools'
+
+    publishDir path: "./results/svs_svim/", mode: 'copy'
+
+    input:
+    path svs
+
+    output:
+    path "*_Q10.vcf", emit: sv_calls_q10
+
+    script:
+    """
+    bcftools view -i 'QUAL >= 10' -o ${svs.getSimpleName()}_Q10.vcf $svs
+    """
+}
+
 
 
 /* 
@@ -495,7 +590,29 @@ process megalodon_modifications {
 }
 
 
+/* 
+* Run de novo genome assembly using Shasta
+*/
+process run_shasta_assembly {
+    label 'bigmen'
+    label 'shasta'
 
+    input:
+    path phased_snps
+
+    output:
+    path "*.vcf.gz", emit: indel_snv_vcf
+
+    script:
+    """
+    singularity run \
+    -B /staging/leuven/stg_00002/lcb/jdemeul/ \
+    -B /staging/leuven/stg_00002/lcb/jdemeul/projects/2021_ASAP/results/ASA_Edin_BA24_38_17/shasta_assembly/:/output \
+    /staging/leuven/stg_00002/lcb/jdemeul/software/singularity_images/zeunas-shasta-docker-latest.img 0.7.0 \
+    --input /staging/leuven/stg_00002/lcb/jdemeul/projects/2021_ASAP/results/ASA_Edin_BA24_38_17/results/fastq/ASA_Edin_BA24_38_17_trimmed.fastq \
+    --conf /staging/leuven/stg_00002/lcb/jdemeul/software/shasta/conf/Nanopore-Sep2020.conf
+    """
+}
 
 
 // }
@@ -520,10 +637,34 @@ workflow minimap_alignment_snv_calling {
         minimap_alignment( genomeref, genomeindex, fastqs )
         sam_to_sorted_bam( minimap_alignment.out.mapped_sam, genomeref, minimap_alignment.out.aligner )
 
+        if ( params.minimap_sv_calls ) {
+            cutesv_sv_calling( sam_to_sorted_bam.out.sorted_bam, sam_to_sorted_bam.out.bam_index, genomeref )
+        }
+
         // SNV calling using PEPPER-margin-DeepVariant
         deepvariant_snv_calling( sam_to_sorted_bam.out.sorted_bam, sam_to_sorted_bam.out.bam_index, genomeref )
 
 }
+
+
+workflow sv_calling {
+    take:
+        bam
+        bam_index
+        genomeref
+    main:
+
+        cutesv_sv_calling( bam, bam_index, genomeref )
+        sniffles_sv_calling( bam, bam_index )
+        svim_sv_calling( bam, bam_index, genomeref )
+        svim_sv_filtering( svim_sv_calling.out.sv_calls )
+    
+    emit:
+        sv_cutesv = cutesv_sv_calling.out.sv_calls
+        sv_svim = svim_sv_filtering.out.sv_calls_q10
+        sv_sniffles = sniffles_sv_calling.out.sv_calls
+}
+
 
 workflow lra_alignment_sv_calling {
     take: 
@@ -584,11 +725,18 @@ workflow process_reads {
 workflow {
 
     genomeref = Channel.fromPath( params.genomeref + "/fasta/genome.fa", checkIfExists: true  )
-    ont_base = Channel.fromPath( params.ont_base_dir, checkIfExists: true  )
+    genomeindex = Channel.fromPath( params.genomeref + "/indexes/minimap2-ont/genome.mmi" )
+    // ont_base = Channel.fromPath( params.ont_base_dir, checkIfExists: true )
+    reads = Channel.fromPath( params.processed_reads, checkIfExists: true )
 
-    process_reads( genomeref, ont_base )
-    lra_alignment_sv_calling( process_reads.out.fastq_trimmed, genomeref )
-    minimap_alignment_snv_calling( process_reads.out.fastq_trimmed, genomeref )
+    // alignment and covnersion into indexed sorted bam
+    minimap_alignment( genomeref, genomeindex, reads )
+    sam_to_sorted_bam( minimap_alignment.out.mapped_sam, genomeref, minimap_alignment.out.aligner )
+    sv_calling( sam_to_sorted_bam.out.sorted_bam, sam_to_sorted_bam.out.bam_index, genomeref )
+
+    // process_reads( genomeref, ont_base )
+    // lra_alignment_sv_calling( process_reads.out.fastq_trimmed, genomeref )
+    // minimap_alignment_snv_calling( process_reads.out.fastq_trimmed, genomeref )
 
 }
 
