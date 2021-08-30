@@ -12,6 +12,7 @@ process svim_sv_calling {
     path sorted_bam
     path bam_index
     path genomeref
+    path genomeindex
 
     output:
     path "working_dir/*.vcf", emit: sv_calls

@@ -54,7 +54,6 @@ process deepvariant_snv_calling {
 
 
 
-
 /* 
 * Assembly polishing using PEPPER
 * NOT IMPLEMENTED YET
@@ -62,7 +61,7 @@ process deepvariant_snv_calling {
 process pepper_assembly_polishing {
     label 'process_high'
     label 'pepper'
-    // label ( params.with_gpu ? 'with_gpus': null )
+    label ( params.with_gpu ? 'with_gpus': null )
 
     publishDir path: "${params.outdir}/results/pepper_polished_assembly/", mode: 'copy'
 
@@ -82,33 +81,48 @@ process pepper_assembly_polishing {
         -o . \
         -t $task.cpus \
         -p ${params.sampleid} \
+        -g \
         --ont
-
-    # this generates 2 VCFs, one per haplotype
-    HAP1_VCF=PEPPER_MARGIN_DEEPVARIANT_ASM_POLISHED_HAP1.vcf.gz
-    HAP2_VCF=PEPPER_MARGIN_DEEPVARIANT_ASM_POLISHED_HAP2.vcf.gz
-
-    POLISHED_ASM_HAP1=HG002_Shasta_run1.PMDV.HAP1.fasta
-    POLISHED_ASM_HAP2=HG002_Shasta_run1.PMDV.HAP2.fasta
-
-    # Apply the VCF to the assembly
-    singularity exec --bind /usr/lib/locale/ \
-    pepper_deepvariant_r0.4.sif \
-    bcftools consensus \
-    -f "${INPUT_DIR}/${ASM}" \
-    -H 2 \
-    -s "${SAMPLE_NAME}" \
-    -o "${OUTPUT_DIR}/${POLISHED_ASM_HAP1}" \
-    "${OUTPUT_DIR}/${HAP1_VCF}"
-
-    singularity exec --bind /usr/lib/locale/ \
-    pepper_deepvariant_r0.4.sif \
-    bcftools consensus \
-    -f "${INPUT_DIR}/${ASM}" \
-    -H 2 \
-    -s "${SAMPLE_NAME}" \
-    -o "${OUTPUT_DIR}/${POLISHED_ASM_HAP2}" \
-    "${OUTPUT_DIR}/${HAP2_VCF}"
     """
-
 }
+
+
+// singularity run --nv -B /staging/leuven/stg_00002/lcb/ \
+//     -B /scratch/ \
+//     -B /local_scratch/ \
+//     /staging/leuven/stg_00002/lcb/jdemeul/software/singularity_images/kishwars-pepper_deepvariant-r0.4.img \
+//     run_pepper_margin_deepvariant polish_assembly \
+//     -b /staging/leuven/stg_00002/lcb/jdemeul/projects/2021_ASAP/results/ASA_Edin_BA24_38_17/results/fastq/ShastaRun/PEPPER-Polishing/ASA_Edin_BA24_38_17_TrimmedReads_ShastaAssembly.aln.bam \
+//     -f /staging/leuven/stg_00002/lcb/jdemeul/projects/2021_ASAP/results/ASA_Edin_BA24_38_17/results/fastq/ShastaRun/Assembly.fasta \
+//     -o /staging/leuven/stg_00002/lcb/jdemeul/projects/2021_ASAP/results/ASA_Edin_BA24_38_17/results/fastq/ShastaRun/PEPPER-Polishing/out \
+//     -t 16 \
+//     -p ASA_Edin_BA24_38_17 \
+//     -g \
+//     --ont
+
+//     # this generates 2 VCFs, one per haplotype
+//     HAP1_VCF=PEPPER_MARGIN_DEEPVARIANT_ASM_POLISHED_HAP1.vcf.gz
+//     HAP2_VCF=PEPPER_MARGIN_DEEPVARIANT_ASM_POLISHED_HAP2.vcf.gz
+
+//     POLISHED_ASM_HAP1=HG002_Shasta_run1.PMDV.HAP1.fasta
+//     POLISHED_ASM_HAP2=HG002_Shasta_run1.PMDV.HAP2.fasta
+
+//     # Apply the VCF to the assembly
+//     singularity exec --bind /usr/lib/locale/ \
+//     pepper_deepvariant_r0.4.sif \
+//     bcftools consensus \
+//     -f "${INPUT_DIR}/${ASM}" \
+//     -H 2 \
+//     -s "${SAMPLE_NAME}" \
+//     -o "${OUTPUT_DIR}/${POLISHED_ASM_HAP1}" \
+//     "${OUTPUT_DIR}/${HAP1_VCF}"
+
+//     singularity exec --bind /usr/lib/locale/ \
+//     pepper_deepvariant_r0.4.sif \
+//     bcftools consensus \
+//     -f "${INPUT_DIR}/${ASM}" \
+//     -H 2 \
+//     -s "${SAMPLE_NAME}" \
+//     -o "${OUTPUT_DIR}/${POLISHED_ASM_HAP2}" \
+//     "${OUTPUT_DIR}/${HAP2_VCF}"
+//     """

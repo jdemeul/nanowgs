@@ -12,7 +12,7 @@ process sam_to_sorted_bam {
     input:
     path mapped_sam
     path genomeref
-    val aligner
+    // val aligner
 
     output:
     path "*.bam", emit: sorted_bam
@@ -24,14 +24,14 @@ process sam_to_sorted_bam {
     """
     samtools sort -@ $task.cpus \
         --write-index \
-        -o ${params.sampleid}_${aligner}.bam##idx##${params.sampleid}_${aligner}.bam.bai \
+        -o ${params.sampleid}_sorted.bam##idx##${params.sampleid}_sorted.bam.bai \
         -m ${samtools_mem}M \
         --reference $genomeref \
-        -T sorttmp_${params.sampleid}_${aligner} \
+        -T sorttmp_${params.sampleid}_sorted \
         $mapped_sam
-    samtools flagstat ${params.sampleid}_${aligner}.bam > ${params.sampleid}_${aligner}.bam.flagstats
-    samtools idxstats ${params.sampleid}_${aligner}.bam > ${params.sampleid}_${aligner}.bam.idxstats
-    samtools stats ${params.sampleid}_${aligner}.bam > ${params.sampleid}_${aligner}.bam.stats
+    samtools flagstat ${params.sampleid}_sorted.bam > ${params.sampleid}_sorted.bam.flagstats
+    samtools idxstats ${params.sampleid}_sorted.bam > ${params.sampleid}_sorted.bam.idxstats
+    samtools stats ${params.sampleid}_sorted.bam > ${params.sampleid}_sorted.bam.stats
     """
 
 }

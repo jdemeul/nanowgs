@@ -34,3 +34,36 @@ process medaka_snv_calling {
     """
 
 }
+
+
+
+/* 
+* Polish a genome assembly using Medaka
+*/
+process medaka_assembly_polishing {
+    label 'process_high'
+    label 'medaka'
+    label ("${params.with_gpu}" ? 'with_gpu': null)
+
+    publishDir path: "${params.outdir}/results/", mode: 'copy'
+
+    input:
+    path fastqs
+    path draft
+
+    output:
+    path "medaka_consensus", emit: consensus
+
+    script:
+    """
+    export CUDA_VISIBLE_DEVICES=${params.gpu_devices}
+    medaka_consensus \
+        -i $fastqs \
+        -d $draft \
+        -o medaka_consensus \
+        -m ${medaka_polish_model} \
+        -t $task.cpus \
+        -b 150
+    """
+
+}

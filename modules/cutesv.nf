@@ -12,6 +12,7 @@ process cutesv_sv_calling {
     path sorted_bam
     path bam_index
     path genomeref
+    path genomeindex
 
     output:
     path "*_cuteSV_svs.vcf", emit: sv_calls
