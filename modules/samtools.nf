@@ -31,7 +31,7 @@ process sam_to_sorted_bam {
         $mapped_sam
     samtools flagstat ${params.sampleid}_sorted.bam > ${params.sampleid}_sorted.bam.flagstats
     samtools idxstats ${params.sampleid}_sorted.bam > ${params.sampleid}_sorted.bam.idxstats
-    samtools stats ${params.sampleid}_sorted.bam > ${params.sampleid}_sorted.bam.stats
+    # samtools stats ${params.sampleid}_sorted.bam > ${params.sampleid}_sorted.bam.stats
     """
 
 }

@@ -3,7 +3,7 @@
 * SNV and indel calling on aligned reads using PEPPER-Margin-DeepVariant
 */
 process deepvariant_snv_calling {
-    label 'process_high'
+    // label 'process_high'
     label 'deepvariant'
     label ( params.with_gpu ? 'with_gpus': null )
 

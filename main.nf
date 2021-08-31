@@ -73,23 +73,23 @@ workflow call_svs {
         include { sniffles_sv_calling as sniffles } from './modules/sniffles'
         include { svim_sv_calling as svim } from './modules/svim'
         include { cutesv_sv_calling as cutesv } from './modules/cutesv'
-        include { svim_sv_filtering as filter } from './modules/bcftools'
+        include { svim_sv_filtering as filtersvim } from './modules/bcftools'
         include { survivor_sv_consensus as survivor } from './modules/survivor'
     
-        cutesv( bam, aligned_reads_idx, genomeref )
+        cutesv( bam, bam_index, genomeref )
         sniffles( bam, bam_index )
         svim( bam, bam_index, genomeref )
-        filter( svim.out.sv_calls )
+        filtersvim( svim.out.sv_calls )
 
         allsvs = cutesv.out.sv_calls
-                    .mix( sniffles.out.sv_calls, svim.out.sv_calls_q10 )
+                    .mix( sniffles.out.sv_calls, filtersvim.out.sv_calls_q10 )
                     .collect()
         survivor( allsvs )
     
     emit:
         cutesv = cutesv.out.sv_calls
         sniffles = sniffles.out.sv_calls
-        svim = svim.out.sv_calls_q10
+        svim = filtersvim.out.sv_calls_q10
         consensus = survivor.out.sv_consensus
 
     
@@ -103,8 +103,8 @@ workflow call_svs_cli {
 
     genomeref = Channel.fromPath( params.genomeref, checkIfExists: true  )
     // genomeindex = Channel.fromPath( params.genomeref + "/indexes/minimap2-ont/genome.mmi" )
-    aligned_reads = Channel.fromPath( params.aligned_bam )
-    aligned_reads_idx = Channel.fromPath( params.aligned_bam + ".bai" )
+    bam = Channel.fromPath( params.aligned_bam )
+    bam_index = Channel.fromPath( params.aligned_bam + ".bai" )
     
     call_svs( genomeref, bam, bam_index )
     
@@ -130,16 +130,32 @@ workflow medaka_variant_calling_cli {
 /* 
 * Call small variants using PEPPER-Margin-DeepVariant
 */
-workflow pepper_deepvariant_calling_cli {
+workflow pepper_deepvariant_calling {
+    take:
+        genomeref
+        bam
+        bam_index
+    
+    main:
+        include { deepvariant_snv_calling as deepvariant } from './modules/deepvariant'
+        deepvariant( bam, bam_index, genomeref )
 
-    include { deepvariant_snv_calling } from './modules/deepvariant'
+    emit:
+        snvs = deepvariant.out.indel_snv_vcf
+}
+
+
+/* 
+* Call small variants using PEPPER-Margin-DeepVariant – CLI shortcut
+*/
+workflow pepper_deepvariant_calling_cli {
 
     genomeref = Channel.fromPath( params.genomeref, checkIfExists: true  )
     // genomeindex = Channel.fromPath( params.genomeref + "/indexes/minimap2-ont/genome.mmi" )
-    aligned_reads = Channel.fromPath( params.aligned_bam )
-    aligned_reads_idx = Channel.fromPath( params.aligned_bam + ".bai" )
+    bam = Channel.fromPath( params.aligned_bam )
+    bam_index = Channel.fromPath( params.aligned_bam + ".bai" )
 
-    deepvariant_snv_calling( aligned_reads, aligned_reads_idx, genomeref )
+    pepper_deepvariant_calling( genomeref, bam, bam_index )
 
 }
 
@@ -230,15 +246,12 @@ workflow process_reads_cli {
 */
 workflow minimap_alignment {
     take: 
-        fastqs
         genomeref
+        fastqs
 
     main:
         include { minimap_alignment as minimap } from './modules/minimap2'
         // include { sam_to_sorted_bam as samtobam } from './modules/samtools'
-
-        genomeref = Channel.fromPath( params.genomeref, checkIfExists: true )
-        fastqs = Channel.fromPath( params.processed_reads )
     
         // use index if matched index is available, otherwise do on the fly
         genomeindex = file( file(params.genomeref).getParent() + "/" + file(params.genomeref).getSimpleName() + ".mmi" )
@@ -267,7 +280,7 @@ workflow minimap_alignment_cli {
     genomeref = Channel.fromPath( params.genomeref, checkIfExists: true )
     fastqs = Channel.fromPath( params.processed_reads )
 
-    minimap_alignment( fastqs, genomeref )
+    minimap_alignment( genomeref, fastqs )
 
 }
 
@@ -318,13 +331,14 @@ workflow {
     process_reads( genomeref, ont_base )
 
     // 1. start assembly
-    shasta_assembly( process_reads.out.fastq_trimmed )
+    shasta_assembly( process_reads.out.fastq_trimmed, params.shasta_config )
 
-    // 2. reference alignment and conversion into indexed sorted bam
+    // // 2. reference alignment and conversion into indexed sorted bam
     minimap_alignment( genomeref, process_reads.out.fastq_trimmed )
-    sam_to_sorted_bam( minimap_alignment.out.sam, genomeref )
+    sam_to_sorted_bam( genomeref, minimap_alignment.out.sam )
 
-    sv_calling( sam_to_sorted_bam.out.sorted_bam, sam_to_sorted_bam.out.bam_index, genomeref )
+    call_svs( genomeref, sam_to_sorted_bam.out.sorted_bam, sam_to_sorted_bam.out.bam_index )
+    pepper_deepvariant_calling( genomeref, sam_to_sorted_bam.out.sorted_bam, sam_to_sorted_bam.out.bam_index )
 
     // lra_alignment_sv_calling( process_reads.out.fastq_trimmed, genomeref )
     // minimap_alignment_snv_calling( process_reads.out.fastq_trimmed, genomeref )

@@ -3,8 +3,8 @@
 * De novo genome assembly using Shasta
 */
 process run_shasta_assembly {
-    label 'bigmem'
     label 'shasta'
+    label 'bigmem'
 
     publishDir path: "${params.outdir}/results/", mode: 'copy'
 
