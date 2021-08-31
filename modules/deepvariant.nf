@@ -13,7 +13,7 @@ process deepvariant_snv_calling {
     path sorted_bam
     path bam_index
     path genomeref
-    path genomerefidx
+    // path genomerefidx
 
     output:
     path "*.vcf.gz", emit: indel_snv_vcf

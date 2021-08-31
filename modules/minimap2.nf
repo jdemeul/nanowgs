@@ -1,6 +1,7 @@
 
 /* 
 * Index a reference genome with minimap2
+* DEPRECATED: doing minimap2 indexing on the fly (few minutes / human genome)
 */
 process create_minimap_index {
     // tag "$genomeref"
@@ -32,7 +33,7 @@ process minimap_alignment {
 
     input:
     path genomeref
-    path index
+    // path index
     path reads
 
     output:
@@ -41,6 +42,6 @@ process minimap_alignment {
 
     script:
     """
-    minimap2 -ax map-ont -t $task.cpus -L --secondary=no --MD --cap-kalloc=500m -K 5g $genomeref ${reads} > mapped.sam
+    minimap2 -ax map-ont -k 17 -t $task.cpus -L --secondary=no --MD --cap-kalloc=500m -K 5g $genomeref ${reads} > mapped.sam
     """
 }

@@ -12,7 +12,7 @@ process basecall_reads {
     input:
     path ont_base
     path genomeref
-    path genomrefidx
+    // path genomrefidx
 
     output:
     path "basecalls/*fastq.gz", emit: fastqs

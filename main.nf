@@ -16,14 +16,14 @@ nextflow.enable.dsl=2
 /* 
 * Guppy basecalling
 */
-workflow guppy_basecalling {
+workflow guppy_basecalling_cli {
 
     include { basecall_reads } from './modules/guppy'
 
-    genomeref = Channel.fromPath( params.genomeref + "/fasta/genome.fa", checkIfExists: true  )
-    genomeindex = Channel.fromPath( params.genomeref + "/indexes/minimap2-ont/genome.mmi" )
+    genomeref = Channel.fromPath( params.genomeref, checkIfExists: true  )
+    // genomeindex = Channel.fromPath( params.genomeref + "/indexes/minimap2-ont/genome.mmi" )
 
-    basecall_reads( Channel.fromPath( params.ont_base_dir ), genomeref, genomeindex )
+    basecall_reads( Channel.fromPath( params.ont_base_dir ), genomeref )
 
 }
 
@@ -32,12 +32,30 @@ workflow guppy_basecalling {
 * Sam to sorted bam conversion and indexing
 */
 workflow sam_to_sorted_bam {
+    take:
+        genomeref
+        sam
 
-    include { sam_to_sorted_bam } from './modules/samtools'
+    main:
+        include { sam_to_sorted_bam as samtobam } from './modules/samtools'
+        samtobam( sam, genomeref )
 
-    genomeref = Channel.fromPath( params.genomeref + "/fasta/genome.fa", checkIfExists: true )
+    emit:
+        sorted_bam = samtobam.out.sorted_bam
+        bam_index = samtobam.out.bam_index
 
-    sam_to_sorted_bam( Channel.fromPath( params.mapped_sam ), genomeref )
+}
+
+
+/* 
+* Sam to sorted bam conversion and indexing – CLI shortcut
+*/
+workflow sam_to_sorted_bam_cli {
+
+    genomeref = Channel.fromPath( params.genomeref, checkIfExists: true )
+    sam = Channel.fromPath( params.mapped_sam, checkIfExists: true )
+
+    sam_to_sorted_bam( sam, genomeref )
 
 }
 
@@ -46,44 +64,65 @@ workflow sam_to_sorted_bam {
 * Call structural variation and generate consensus
 */
 workflow call_svs {
+    take:
+        genomeref
+        bam
+        bam_index
 
-    include { sniffles_sv_calling } from './modules/sniffles'
-    include { svim_sv_calling } from './modules/svim'
-    include { cutesv_sv_calling } from './modules/cutesv'
-    include { svim_sv_filtering } from './modules/bcftools'
-    include { survivor_sv_consensus } from './modules/survivor'
+    main:
+        include { sniffles_sv_calling as sniffles } from './modules/sniffles'
+        include { svim_sv_calling as svim } from './modules/svim'
+        include { cutesv_sv_calling as cutesv } from './modules/cutesv'
+        include { svim_sv_filtering as filter } from './modules/bcftools'
+        include { survivor_sv_consensus as survivor } from './modules/survivor'
+    
+        cutesv( bam, aligned_reads_idx, genomeref )
+        sniffles( bam, bam_index )
+        svim( bam, bam_index, genomeref )
+        filter( svim.out.sv_calls )
 
-    genomeref = Channel.fromPath( params.genomeref + "/fasta/genome.fa", checkIfExists: true  )
-    genomeindex = Channel.fromPath( params.genomeref + "/indexes/minimap2-ont/genome.mmi" )
+        allsvs = cutesv.out.sv_calls
+                    .mix( sniffles.out.sv_calls, svim.out.sv_calls_q10 )
+                    .collect()
+        survivor( allsvs )
+    
+    emit:
+        cutesv = cutesv.out.sv_calls
+        sniffles = sniffles.out.sv_calls
+        svim = svim.out.sv_calls_q10
+        consensus = survivor.out.sv_consensus
+
+    
+}
+
+
+/* 
+* Call structural variation and generate consensus
+*/
+workflow call_svs_cli {
+
+    genomeref = Channel.fromPath( params.genomeref, checkIfExists: true  )
+    // genomeindex = Channel.fromPath( params.genomeref + "/indexes/minimap2-ont/genome.mmi" )
     aligned_reads = Channel.fromPath( params.aligned_bam )
     aligned_reads_idx = Channel.fromPath( params.aligned_bam + ".bai" )
     
-    cutesv_sv_calling( aligned_reads, aligned_reads_idx, genomeref, genomeindex )
-    sniffles_sv_calling( aligned_reads, aligned_reads_idx )
-    svim_sv_calling( aligned_reads, aligned_reads_idx, genomeref, genomeindex )
-    svim_sv_filtering( svim_sv_calling.out.sv_calls )
-
-    allsvs = cutesv_sv_calling.out.sv_calls
-                .mix( sniffles_sv_calling.out.sv_calls, svim_sv_filtering.out.sv_calls_q10 )
-                .collect()
-    survivor_sv_consensus( allsvs )
-
+    call_svs( genomeref, bam, bam_index )
     
 }
 
 /* 
 * Call small variants using ONT Medaka
 */
-workflow medaka_variant_calling {
+workflow medaka_variant_calling_cli {
 
     include { medaka_snv_calling } from './modules/medaka'
 
-    genomeref = Channel.fromPath( params.genomeref + "/fasta/genome.fa", checkIfExists: true  )
-    genomeindex = Channel.fromPath( params.genomeref + "/indexes/minimap2-ont/genome.mmi" )
+    genomeref = Channel.fromPath( params.genomeref, checkIfExists: true  )
+    // genomeindex = Channel.fromPath( params.genomeref + "/indexes/minimap2-ont/genome.mmi" )
     aligned_reads = Channel.fromPath( params.aligned_bam )
     aligned_reads_idx = Channel.fromPath( params.aligned_bam + ".bai" )
 
-    medaka_snv_calling( aligned_reads, aligned_reads_idx, genomeref, genomeindex )
+    medaka_snv_calling( aligned_reads, aligned_reads_idx, genomeref )
 
 }
 
@@ -91,16 +130,16 @@ workflow medaka_variant_calling {
 /* 
 * Call small variants using PEPPER-Margin-DeepVariant
 */
-workflow pepper_deepvariant_calling {
+workflow pepper_deepvariant_calling_cli {
 
     include { deepvariant_snv_calling } from './modules/deepvariant'
 
-    genomeref = Channel.fromPath( params.genomeref + "/fasta/genome.fa", checkIfExists: true  )
-    genomeindex = Channel.fromPath( params.genomeref + "/indexes/minimap2-ont/genome.mmi" )
+    genomeref = Channel.fromPath( params.genomeref, checkIfExists: true  )
+    // genomeindex = Channel.fromPath( params.genomeref + "/indexes/minimap2-ont/genome.mmi" )
     aligned_reads = Channel.fromPath( params.aligned_bam )
     aligned_reads_idx = Channel.fromPath( params.aligned_bam + ".bai" )
 
-    deepvariant_snv_calling( aligned_reads, aligned_reads_idx, genomeref, genomeindex )
+    deepvariant_snv_calling( aligned_reads, aligned_reads_idx, genomeref )
 
 }
 
@@ -109,19 +148,38 @@ workflow pepper_deepvariant_calling {
 * Run a de novo genome assembly using Shasta
 */
 workflow shasta_assembly {
+    take:
+        fastq
+        config
+    
+    main:
+        include { run_shasta_assembly as shasta } from './modules/shasta'
+        
+        shasta( fastq, config )
 
-    include { run_shasta_assembly } from './modules/shasta'
+    emit:
+        shasta.out.assembly
+
+}
+
+
+/* 
+* Run a de novo genome assembly using Shasta – CLI shortcut
+*/
+workflow shasta_assembly_cli {
 
     fastq = Channel.fromPath( params.processed_reads )
     config = Channel.fromPath( params.shasta_config )
 
-    run_shasta_assembly( fastq, config )
+    shasta_assembly( fastq, config )
 
 }
 
 
 
-// Proper workflows
+/* 
+* Process reads/squiggles from an ONT run
+*/
 workflow process_reads {
     take:
         genomeref
@@ -129,57 +187,90 @@ workflow process_reads {
 
     main:
     
-        include { create_minimap_index } from './modules/minimap2'
-        include { basecall_reads } from './modules/guppy'
-        include { filter_reads } from './modules/fastp'
+        // include { create_minimap_index } from './modules/minimap2'
+        include { basecall_reads as basecall } from './modules/guppy'
+        include { filter_reads as filter } from './modules/fastp'
 
         if ( params.rebasecall ) {
 
-            if ( !file( params.genomeref + "/indexes/minimap2-ont/genome.mmi" ).exists() ) {
-                create_minimap_index( genomeref )
-                genomeindex = create_minimap_index.out.mmi
-            } else {
-                genomeindex = Channel.fromPath( params.genomeref + "/indexes/minimap2-ont/genome.mmi" )
-            }
+            // if ( !file( params.genomeref + "/indexes/minimap2-ont/genome.mmi" ).exists() ) {
+            //     create_minimap_index( genomeref )
+            //     genomeindex = create_minimap_index.out.mmi
+            // } else {
+            //     genomeindex = Channel.fromPath( params.genomeref + "/indexes/minimap2-ont/genome.mmi" )
+            // }
 
-            basecall_reads( Channel.fromPath( params.ont_base_dir ), genomeref, genomeindex )
-            filter_reads( basecall_reads.out.fastqs.collect() )
+            basecall( Channel.fromPath( params.ont_base_dir ), genomeref )
+            filter( basecall.out.fastqs.collect() )
         } else {
-            filter_reads( Channel.fromPath( params.ont_base_dir + "**.fastq.gz" ).collect() )
+            filter( Channel.fromPath( params.ont_base_dir + "**.fastq.gz" ).collect() )
         }
 
     emit:
-        fastq_trimmed = filter_reads.out.fastq_trimmed
+        fastq_trimmed = filter.out.fastq_trimmed
 
 }
 
 
+/* 
+* Process reads/squiggles from an ONT run – CLI shortcut
+*/
+workflow process_reads_cli {
+
+    genomeref = Channel.fromPath( params.genomeref, checkIfExists: true )
+    ont_base = Channel.fromPath( params.ont_base_dir )
+
+    process_reads( genomeref, ont_base )
+
+}
+
+
+/* 
+* Align reads to a reference genome using minimap2 and turn into sorted bam
+*/
 workflow minimap_alignment {
     take: 
         fastqs
         genomeref
 
     main:
-        include { create_lra_index; lra_alignment } from './modules/minimap2'
-        include { sam_to_sorted_bam } from './modules/samtools'
-        
-        // genome indexing
-        if ( !file( params.genomeref + "/indexes/minimap2-ont/genome.mmi" ).exists() ) {
-            create_minimap_index( genomeref )
-            genomeindex = create_minimap_index.out.mmi
+        include { minimap_alignment as minimap } from './modules/minimap2'
+        // include { sam_to_sorted_bam as samtobam } from './modules/samtools'
+
+        genomeref = Channel.fromPath( params.genomeref, checkIfExists: true )
+        fastqs = Channel.fromPath( params.processed_reads )
+    
+        // use index if matched index is available, otherwise do on the fly
+        genomeindex = file( file(params.genomeref).getParent() + "/" + file(params.genomeref).getSimpleName() + ".mmi" )
+        if ( genomeindex.exists() ) {
+            minimap( Channel.fromPath( genomeindex ), fastqs )
         } else {
-            genomeindex = Channel.fromPath( params.genomeref + "/indexes/minimap2-ont/genome.mmi" )
+            minimap( genomeref, fastqs )
         }
 
-        // alignment and covnersion into indexed sorted bam
-        minimap_alignment( genomeref, genomeindex, fastqs )
-        sam_to_sorted_bam( minimap_alignment.out.mapped_sam, genomeref, minimap_alignment.out.aligner )
+        // alignment and conversion into indexed sorted bam
+        // samtobam( minimap.out.mapped_sam, genomeref )
 
     emit:
-        sorted_bam = sam_to_sorted_bam.out.sorted_bam
-        bam_index = sam_to_sorted_bam.out.bam_index
+        sam = minimap.out.mapped_sam
+        // sorted_bam = samtobam.out.sorted_bam
+        // bam_index = samtobam.out.bam_index
 
 }
+
+
+/* 
+* Align reads to a reference genome using minimap2 and turn into sorted bam – CLI shortcut
+*/
+workflow minimap_alignment_cli {
+
+    genomeref = Channel.fromPath( params.genomeref, checkIfExists: true )
+    fastqs = Channel.fromPath( params.processed_reads )
+
+    minimap_alignment( fastqs, genomeref )
+
+}
+
 
 
 workflow lra_alignment_sv_calling {
@@ -218,17 +309,23 @@ workflow lra_alignment_sv_calling {
 
 workflow {
 
-    genomeref = Channel.fromPath( params.genomeref + "/fasta/genome.fa", checkIfExists: true  )
-    genomeindex = Channel.fromPath( params.genomeref + "/indexes/minimap2-ont/genome.mmi" )
-    // ont_base = Channel.fromPath( params.ont_base_dir, checkIfExists: true )
-    reads = Channel.fromPath( params.processed_reads, checkIfExists: true )
+    genomeref = Channel.fromPath( params.genomeref, checkIfExists: true  )
+    ont_base = Channel.fromPath( params.ont_base_dir, checkIfExists: true )
+    // reads = Channel.fromPath( params.processed_reads, checkIfExists: true )
+    // genomeindex = Channel.fromPath( params.genomeref + "/indexes/minimap2-ont/genome.mmi" )
 
-    // alignment and covnersion into indexed sorted bam
-    minimap_alignment( genomeref, genomeindex, reads )
-    sam_to_sorted_bam( minimap_alignment.out.mapped_sam, genomeref, minimap_alignment.out.aligner )
+    // process reads
+    process_reads( genomeref, ont_base )
+
+    // 1. start assembly
+    shasta_assembly( process_reads.out.fastq_trimmed )
+
+    // 2. reference alignment and conversion into indexed sorted bam
+    minimap_alignment( genomeref, process_reads.out.fastq_trimmed )
+    sam_to_sorted_bam( minimap_alignment.out.sam, genomeref )
+
     sv_calling( sam_to_sorted_bam.out.sorted_bam, sam_to_sorted_bam.out.bam_index, genomeref )
 
-    // process_reads( genomeref, ont_base )
     // lra_alignment_sv_calling( process_reads.out.fastq_trimmed, genomeref )
     // minimap_alignment_snv_calling( process_reads.out.fastq_trimmed, genomeref )
 

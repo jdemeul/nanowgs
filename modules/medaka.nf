@@ -13,7 +13,7 @@ process medaka_snv_calling {
     path sorted_bam
     path bam_index
     path genomeref
-    path genomerefidx
+    // path genomerefidx
 
     output:
     path "snv_indel_medaka", emit: medaka_variant
@@ -52,7 +52,7 @@ process medaka_assembly_polishing {
     path draft
 
     output:
-    path "medaka_consensus", emit: consensus
+    path "medaka_consensus/consensus.fasta", emit: consensus
 
     script:
     """
