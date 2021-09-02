@@ -3,7 +3,9 @@
 * Filtering of SVIM SV calls
 */
 process svim_sv_filtering {
-    label 'process_low'
+    label 'cpu_low'
+    label 'mem_low'
+    label 'time_low'
     label 'bcftools'
 
     publishDir path: "${params.outdir}/results/svs_svim/", mode: 'copy'
@@ -26,7 +28,9 @@ process svim_sv_filtering {
 * Variant call filtering for PASS variants
 */
 process variant_filtering {
-    label 'process_high'
+    label 'cpu_low'
+    label 'mem_low'
+    label 'time_low'
     label 'bcftools'
 
     publishDir path: "${params.outdir}/results/", mode: 'copy'

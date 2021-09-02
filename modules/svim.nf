@@ -3,7 +3,9 @@
 * Structural variant calling on aligned reads using SVIM
 */
 process svim_sv_calling {
-    label 'process_low'
+    label 'cpu_low'
+    label 'mem_low'
+    label 'time_low'
     label 'svim'
 
     publishDir path: "${params.outdir}/results/svs_svim/", mode: 'copy'

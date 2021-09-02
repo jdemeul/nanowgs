@@ -3,9 +3,8 @@
 * SNV and indel calling on aligned reads using Medaka
 */
 process medaka_snv_calling {
-    label 'process_medium'
     label 'medaka'
-    label ("${params.with_gpu}" ? 'with_gpu': null)
+    label ( params.with_gpu ? 'with_gpu': 'cpu_high, mem_high, time_high')
 
     publishDir path: "${params.outdir}/results/", mode: 'copy'
 
@@ -41,9 +40,8 @@ process medaka_snv_calling {
 * Polish a genome assembly using Medaka
 */
 process medaka_assembly_polishing {
-    label 'process_high'
     label 'medaka'
-    label ("${params.with_gpu}" ? 'with_gpu': null)
+    label ( params.with_gpu ? 'with_gpu': 'cpu_high, mem_high, time_high')
 
     publishDir path: "${params.outdir}/results/", mode: 'copy'
 

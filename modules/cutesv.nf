@@ -3,7 +3,9 @@
 * Structural variant calling on aligned reads using cuteSV
 */
 process cutesv_sv_calling {
-    label 'process_high'
+    label 'cpu_mid'
+    label 'mem_mid'
+    label 'time_mid'
     label 'cutesv'
 
     publishDir path: "${params.outdir}/results/svs_cutesv/", mode: 'copy'

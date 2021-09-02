@@ -3,7 +3,9 @@
 * Structural variant calling on aligned reads using Sniffles
 */
 process sniffles_sv_calling {
-    label 'process_high'
+    label 'cpu_mid'
+    label 'mem_mid'
+    label 'time_low'
     label 'sniffles'
 
     publishDir path: "${params.outdir}/results/svs_sniffles/", mode: 'copy'

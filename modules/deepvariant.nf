@@ -5,7 +5,7 @@
 process deepvariant_snv_calling {
     // label 'process_high'
     label 'deepvariant'
-    label ( params.with_gpu ? 'with_gpus': null )
+    label ( params.with_gpu ? 'with_gpus': 'cpu_high, mem_high, time_high' )
 
     publishDir path: "${params.outdir}/results/snv_indel_deepvariant/", mode: 'copy'
 
@@ -32,10 +32,11 @@ process deepvariant_snv_calling {
             -o . \
             -p ${params.sampleid} \
             -s ${params.sampleid} \
-            -t $task.cpus \
             --ont \
+            -t 8 \
             -g \
             --phased_output
+        #    -t $task.cpus \
         """
     else 
         """
@@ -59,7 +60,9 @@ process deepvariant_snv_calling {
 * NOT IMPLEMENTED YET
 */
 process pepper_assembly_polishing {
-    label 'process_high'
+    label 'cpu_high'
+    label 'mem_high'
+    label 'time_mid'
     label 'pepper'
     label ( params.with_gpu ? 'with_gpus': null )
 

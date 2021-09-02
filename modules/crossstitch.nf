@@ -4,7 +4,9 @@
 * NOTE UNTESTED IN NEXTFLOW
 */
 process create_personal_genome {
-    label 'process_low'
+    label 'cpu_low'
+    label 'mem_low'
+    label 'time_low'
     label 'deepvariant'
 
     publishDir path: "${params.outdir}/results/crossstitch", mode: 'copy'

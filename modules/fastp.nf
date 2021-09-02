@@ -3,7 +3,9 @@
 * Process (filter + trim) fastq files with fastp
 */
 process filter_reads {
-    label 'process_medium'
+    label 'cpu_low'
+    label 'mem_low'
+    label 'time_mid'
     label 'fastp'
 
     publishDir path: "${params.outdir}/results/fastq/", mode: 'copy'

@@ -3,9 +3,8 @@
 * Basecall reads with ONT Guppy
 */
 process basecall_reads {
-    label 'process_middle'
     label 'guppy'
-    label ( params.with_gpu ? 'with_gpus': null )
+    label ( params.with_gpu ? 'with_gpus': 'cpu_high, mem_mid, time_high' )
 
     publishDir path: "${params.outdir}/results/basecalls/", mode: 'copy'
 
@@ -19,16 +18,28 @@ process basecall_reads {
     path "basecalls/sequencing_summary.txt"
 
     script:
-    """
-    guppy_basecaller \
-        -i $ont_base \
-        -s basecalls \
-        -c ${params.guppy_config} \
-        --recursive \
-        --device "cuda:${params.gpu_devices}" \
-        --align_ref $genomeref \
-        --compress_fastq \
-        --disable_qscore_filtering
-    """
+    if ( params.with_gpu )
+        """
+        guppy_basecaller \
+            -i $ont_base \
+            -s basecalls \
+            -c ${params.guppy_config} \
+            --recursive \
+            --device "cuda:${params.gpu_devices}" \
+            --align_ref $genomeref \
+            --compress_fastq \
+            --disable_qscore_filtering
+        """
+    else 
+        """
+        guppy_basecaller \
+            -i $ont_base \
+            -s basecalls \
+            --recursive \
+            --device "cuda:${params.gpu_devices}" \
+            --align_ref $genomeref \
+            --compress_fastq \
+            --disable_qscore_filtering
+        """
 }
 

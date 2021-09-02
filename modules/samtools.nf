@@ -3,7 +3,9 @@
 * Sam to sorted bam conversion using samtools
 */
 process sam_to_sorted_bam {
-    label 'process_medium'
+    label 'cpu_high'
+    label 'mem_high'
+    label 'time_low'
     label 'samtools'
 
     publishDir path: "${params.outdir}/results/bam/", mode: 'copy',

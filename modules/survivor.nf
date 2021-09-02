@@ -3,7 +3,9 @@
 * Creating consensus structural variant calls using SURVIVOR
 */
 process survivor_sv_consensus {
-    label 'process_low'
+    label 'cpu_low'
+    label 'mem_low'
+    label 'time_low'
     label 'survivor'
 
     publishDir path: "${params.outdir}/results/svs_consensus/", mode: 'copy'

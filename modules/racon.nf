@@ -3,11 +3,11 @@
 * Polish a genome assembly using Racon
 */
 process racon_assembly_polishing {
-    label 'process_high'
     label 'racon'
-    label ("${params.with_gpu}" ? 'with_gpu': null)
+    // label ("${params.with_gpu}" ? 'with_gpu': null)
+    label 'bigmem'
 
-    publishDir path: "${params.outdir}/results/", mode: 'copy'
+    // publishDir path: "${params.outdir}/results/", mode: 'copy'
 
     input:
     path fastq
@@ -15,18 +15,26 @@ process racon_assembly_polishing {
     path draft
 
     output:
-    path "consensus.fasta", emit: consensus
+    path "consensus.fa", emit: consensus 
+    // stdout emit: consensus
 
     script:
     """
-    export CUDA_VISIBLE_DEVICES=${params.gpu_devices}
+    # export CUDA_VISIBLE_DEVICES=${params.gpu_devices} memory requirements do not permit running on the GPU nodes
     racon \
-    -t $task.cpus \
-    --cudapoa-batches 50 \
-    --cudaaligner-batches 10 \
-    $fastq \
-    $aligned_reads_sam \
-    $draft
+    -u \
+    -m 8 -x -6 -g -8 -w 500 \
+    -t 28 \
+    $fastq $aligned_reads_sam $draft > consensus.fa
+    echo "Done running Racon and output to consensus.fa"
+    # --cudapoa-batches 50 \  
+    # --cudaaligner-batches 10 \
+    """
+
+    stub:
+    """
+    echo "racon -u -m 8 -x -6 -g -8 -w 500 -t $task.numthreads $fastq $aligned_reads_sam $draft > racon_consensus.fa"
+    touch racon_consensus.fa
     """
 
 }

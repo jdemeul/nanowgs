@@ -3,7 +3,9 @@
 * Assess a de novo genome assembly using Quast
 */
 process run_shasta_assembly {
-    label 'process_high'
+    label 'cpu_high'
+    label 'mem_high'
+    label 'time_mid'
     label 'quast'
 
     publishDir path: "${params.outdir}/results/", mode: 'copy'

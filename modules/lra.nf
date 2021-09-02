@@ -4,7 +4,9 @@
 */
 process create_lra_index {
     // tag "$genomeref"
-    label 'process_medium'
+    label 'cpu_low'
+    label 'mem_low'
+    label 'time_low'
     label 'lra'
 
     publishDir path: "${file(params.genomeref).getParent() + '/indexes/lra-ont/'}", mode: 'copy'
@@ -26,7 +28,9 @@ process create_lra_index {
 * Align reads to a reference genome with LRA
 */
 process lra_alignment {
-    label 'process_high'
+    label 'cpu_high'
+    label 'mem_mid'
+    label 'time_mid'
     label 'lra'
 
     input:

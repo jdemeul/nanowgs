@@ -5,7 +5,9 @@
 */
 process create_minimap_index {
     // tag "$genomeref"
-    label 'process_medium'
+    label 'cpu_low'
+    label 'mem_low'
+    label 'time_low'
     label 'minimap'
 
     publishDir path: "${file(params.genomeref).getParent() + '/indexes/minimap2-ont/'}", mode: 'copy'
@@ -28,7 +30,9 @@ process create_minimap_index {
 * Align reads to a reference genome with minimap2
 */
 process minimap_alignment {
-    label 'process_high'
+    label 'cpu_high'
+    label 'mem_high'
+    label 'time_mid'
     label 'minimap'
 
     input:
@@ -42,6 +46,6 @@ process minimap_alignment {
 
     script:
     """
-    minimap2 -ax map-ont -k 17 -t $task.cpus -L --secondary=no --MD --cap-kalloc=500m -K 5g $genomeref $reads > mapped.sam
+    minimap2 -ax map-ont -k 17 -t $task.cpus -L --secondary=no --MD --cap-kalloc=1g -K 10g $genomeref $reads > mapped.sam
     """
 }
