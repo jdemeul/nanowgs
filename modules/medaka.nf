@@ -4,7 +4,9 @@
 */
 process medaka_snv_calling {
     label 'medaka'
-    label ( params.with_gpu ? 'with_gpu': 'cpu_high, mem_high, time_high')
+    label ( params.with_gpu ? 'with_gpu': 'cpu_high')
+    label ( params.with_gpu ? null: 'mem_high')
+    label ( params.with_gpu ? null: 'time_high')
 
     publishDir path: "${params.outdir}/results/", mode: 'copy'
 
@@ -41,7 +43,9 @@ process medaka_snv_calling {
 */
 process medaka_assembly_polishing {
     label 'medaka'
-    label ( params.with_gpu ? 'with_gpu': 'cpu_high, mem_high, time_high')
+    label ( params.with_gpu ? 'with_gpu': 'cpu_low')
+    label ( params.with_gpu ? null: 'mem_mid')
+    label ( params.with_gpu ? null: 'time_high')
 
     publishDir path: "${params.outdir}/results/", mode: 'copy'
 
@@ -59,9 +63,101 @@ process medaka_assembly_polishing {
         -i $fastqs \
         -d $draft \
         -o medaka_consensus \
-        -m ${medaka_polish_model} \
+        -m ${params.medaka_polish_model} \
         -t $task.cpus \
         -b 150
+    """
+
+}
+
+
+
+/* 
+* Polish a genome assembly using Medaka
+*/
+process medaka_assembly_polish_align {
+    label 'medaka'
+    label 'cpu_high'
+    label 'mem_high'
+    label 'time_mid'
+
+    // publishDir path: "${params.outdir}/results/", mode: 'copy'
+
+    input:
+    path fastqs
+    path draft
+
+    output:
+    path "calls_to_draft.bam", emit: calls_to_draft
+    path "calls_to_draft.bam.bai", emit: calls_to_draft_index
+
+    script:
+    """
+    mini_align \
+        -i $fastqs \
+        -r $draft \
+        -m \
+        -p calls_to_draft \
+        -t $task.cpus
+    """
+
+}
+
+
+/* 
+* Polish a genome assembly using Medaka
+*/
+process medaka_assembly_polish_consensus {
+    label 'medaka'
+    label 'cpu_low'
+    label 'mem_low'
+    label 'time_low'
+
+    input:
+    path bam
+    path bamidx
+    each contig
+
+    output:
+    path "*.hdf", emit: probs
+
+    script:
+    """
+    export CUDA_VISIBLE_DEVICES=${params.gpu_devices}
+    medaka consensus \
+        $bam \
+        ${contig}.hdf \
+        --model ${params.medaka_polish_model} \
+        --batch 150
+        --threads 8 \
+        --region $contig
+    """
+
+}
+
+
+/* 
+* Polish a genome assembly using Medaka
+*/
+process medaka_assembly_polish_stitch {
+    label 'medaka'
+    label 'cpu_low'
+    label 'mem_low'
+    label 'time_low'
+
+    publishDir path: "${params.outdir}/results/racon_medaka_consensus/", mode: 'copy'
+
+    input:
+    path hdfs
+
+    output:
+    path "consensus.fasta", emit: consensus
+
+    script:
+    """
+    medaka stitch \
+        $hdfs \
+        consensus.fasta 
     """
 
 }

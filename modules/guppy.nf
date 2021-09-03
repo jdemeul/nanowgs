@@ -4,7 +4,9 @@
 */
 process basecall_reads {
     label 'guppy'
-    label ( params.with_gpu ? 'with_gpus': 'cpu_high, mem_mid, time_high' )
+    label ( params.with_gpu ? 'with_gpu': 'cpu_high')
+    label ( params.with_gpu ? null: 'mem_mid')
+    label ( params.with_gpu ? null: 'time_high')
 
     publishDir path: "${params.outdir}/results/basecalls/", mode: 'copy'
 

@@ -3,9 +3,10 @@
 * Identification of modified bases using Megalodon
 */
 process megalodon_modifications {
-    label 'process_high'
     label 'megalodon'
-    label (${params.with_gpu} ? 'with_gpu': null)
+    label ( params.with_gpu ? 'with_gpu': 'cpu_high')
+    label ( params.with_gpu ? null: 'mem_high')
+    label ( params.with_gpu ? null: 'time_high')
 
     publishDir path: "${params.outdir}/results/", mode: 'copy'
 

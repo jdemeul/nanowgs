@@ -37,3 +37,28 @@ process sam_to_sorted_bam {
     """
 
 }
+
+
+// /* 
+// * Index a fasta file
+// */
+// process index_fasta {
+//     label 'cpu_low'
+//     label 'mem_low'
+//     label 'time_low'
+//     label 'samtools'
+
+//     input:
+//     path fasta
+
+//     output:
+//     path "*.fai", emit: faidx
+//     stdout emit: contig
+
+//     script:
+//     """
+//     samtools faidx $fasta
+//     cat *.fai | cut -f 1
+//     """
+
+// }

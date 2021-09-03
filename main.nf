@@ -31,6 +31,7 @@ include { deepvariant_snv_calling as deepvariant } from './modules/deepvariant'
 include { run_shasta_assembly as shasta } from './modules/shasta'
 include { racon_assembly_polishing as racon } from './modules/racon'
 include { medaka_assembly_polishing as medaka_polish } from './modules/medaka'
+include { medaka_assembly_polish_align; medaka_assembly_polish_stitch; medaka_assembly_polish_consensus } from './modules/medaka'
 
 include { create_lra_index; lra_alignment } from './modules/lra'
 
@@ -228,10 +229,11 @@ workflow assembly_polishing {
 
         minimap( assembly, fastq )
         racon( fastq, minimap.out.mapped_sam, assembly )
-        medaka_polish( fastq, racon.out.consensus )
+        // medaka_polish( fastq, racon.out.consensus )
+        medaka_polish_parallel( fastq, racon.out.consensus )
 
     emit:
-        polished_assembly = medaka_polish.out.consensus
+        polished_assembly = medaka_polish_parallel.out.consensus
 }
 
 
@@ -401,6 +403,47 @@ workflow reference_based_variant_calling {
 
 }
 
+
+workflow medaka_polish_parallel {
+    take:
+        fastqs
+        draft
+
+    main:
+        medaka_assembly_polish_align( fastqs, draft )
+        // draft.splitFasta( record: [id: true, seqString: false ]).view { it.id }
+        contigs = draft.splitFasta( record: [id: true, seqString: false ]).map { it.id }
+
+        medaka_assembly_polish_consensus( medaka_assembly_polish_align.out.calls_to_draft,
+                                         medaka_assembly_polish_align.out.calls_to_draft_index,
+                                         contigs )
+
+        medaka_assembly_polish_stitch( medaka_assembly_polish_consensus.out.probs.collect() )
+    
+    emit:
+        conensus = medaka_assembly_polish_stitch.out.consensus
+}
+
+workflow medaka_polish_parallel_cli {
+
+    fastqs = Channel.fromPath( params.processed_reads )
+    draft = Channel.fromPath( params.genomeref )
+
+    medaka_assembly_polish_parallel( fastqs, draft )    
+}
+
+
+// workflow trial_cli {
+
+//         // medaka_assembly_polishing_align( fastqs, draft )
+//         draft = Channel.fromPath( params.genomeref )
+//         draft.splitFasta( record: [id: true, seqString: false ]).map { it.id }
+
+//         // medaka_assembly_polishing_align( medaka_assembly_polishing_consensus.out.bam,
+//         //                                  medaka_assembly_polishing_consensus.out.bamindex,
+//         //                                  draft.splitFasta( record: [id: true, seqString: false ]) )
+    
+// }
 
 workflow {
 
