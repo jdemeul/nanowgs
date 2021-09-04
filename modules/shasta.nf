@@ -4,7 +4,9 @@
 */
 process run_shasta_assembly {
     label 'shasta'
-    label 'bigmem'
+    label ( workflow.profile == 'qsub' ? 'bigmem': 'cpu_high' )
+    label ( workflow.profile == 'qsub' ? null: 'mem_high' )
+    label ( workflow.profile == 'qsub' ? null: 'time_mid' )
 
     publishDir path: "${params.outdir}/results/", mode: 'copy'
 

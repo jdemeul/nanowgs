@@ -5,9 +5,11 @@
 process deepvariant_snv_calling {
     // label 'process_high'
     label 'deepvariant'
-    label ( params.with_gpu ? 'with_gpu': 'cpu_high')
-    label ( params.with_gpu ? null: 'mem_high')
-    label ( params.with_gpu ? null: 'time_high')
+    label ( params.with_gpu ? 'with_gpu': 'cpu_high' )
+    label ( params.with_gpu ? null: 'mem_high' )
+    label ( params.with_gpu ? null: 'time_high' )
+
+    container ( params.with_gpu ? 'kishwars/pepper_deepvariant:r0.5-gpu': 'kishwars/pepper_deepvariant:r0.5' )
 
     publishDir path: "${params.outdir}/results/snv_indel_deepvariant/", mode: 'copy'
 

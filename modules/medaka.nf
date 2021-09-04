@@ -78,7 +78,7 @@ process medaka_assembly_polishing {
 process medaka_assembly_polish_align {
     label 'medaka'
     label 'cpu_high'
-    label 'mem_high'
+    label 'mem_mid'
     label 'time_mid'
 
     // publishDir path: "${params.outdir}/results/", mode: 'copy'
@@ -109,7 +109,8 @@ process medaka_assembly_polish_align {
 */
 process medaka_assembly_polish_consensus {
     label 'medaka'
-    label 'cpu_low'
+    // label 'cpu_low'
+    cpus = 2
     label 'mem_low'
     label 'time_low'
 
@@ -123,14 +124,14 @@ process medaka_assembly_polish_consensus {
 
     script:
     """
-    export CUDA_VISIBLE_DEVICES=${params.gpu_devices}
+    # export CUDA_VISIBLE_DEVICES=${params.gpu_devices}
     medaka consensus \
         $bam \
         ${contig}.hdf \
         --model ${params.medaka_polish_model} \
-        --batch 150
-        --threads 8 \
-        --region $contig
+        --batch 200 \
+        --threads $task.cpus \
+        --regions $contig
     """
 
 }
@@ -149,6 +150,7 @@ process medaka_assembly_polish_stitch {
 
     input:
     path hdfs
+    path draft
 
     output:
     path "consensus.fasta", emit: consensus
@@ -156,7 +158,9 @@ process medaka_assembly_polish_stitch {
     script:
     """
     medaka stitch \
+        --threads $task.cpus \
         $hdfs \
+        $draft \
         consensus.fasta 
     """
 

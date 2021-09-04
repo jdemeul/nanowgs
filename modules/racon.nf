@@ -5,7 +5,9 @@
 process racon_assembly_polishing {
     label 'racon'
     // label ("${params.with_gpu}" ? 'with_gpu': null)
-    label 'bigmem'
+    label ( workflow.profile == 'qsub' ? 'bigmem': 'cpu_high' )
+    label ( workflow.profile == 'qsub' ? null: 'mem_high' )
+    label ( workflow.profile == 'qsub' ? null: 'time_mid' )
 
     publishDir path: "${params.outdir}/results/racon/", mode: 'copy'
             // saveAs: { filename -> "racon_consensus.fa" }

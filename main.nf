@@ -42,33 +42,12 @@ include { create_lra_index; lra_alignment } from './modules/lra'
 */
 workflow guppy_basecalling_cli {
 
-    // include { basecall_reads } from './modules/guppy'
-
     genomeref = Channel.fromPath( params.genomeref, checkIfExists: true  )
     // genomeindex = Channel.fromPath( params.genomeref + "/indexes/minimap2-ont/genome.mmi" )
 
     basecall( Channel.fromPath( params.ont_base_dir ), genomeref )
 
 }
-
-
-// /* 
-// * Sam to sorted bam conversion and indexing
-// */
-// workflow sam_to_sorted_bam {
-//     take:
-//         genomeref
-//         sam
-
-//     main:
-//         // include { sam_to_sorted_bam as samtobam } from './modules/samtools'
-//         samtobam( sam, genomeref )
-
-//     emit:
-//         sorted_bam = samtobam.out.sorted_bam
-//         bam_index = samtobam.out.bam_index
-
-// }
 
 
 /* 
@@ -93,13 +72,7 @@ workflow call_svs {
         bam
         bam_index
 
-    main:
-        // include { sniffles_sv_calling as sniffles } from './modules/sniffles'
-        // include { svim_sv_calling as svim } from './modules/svim'
-        // include { cutesv_sv_calling as cutesv } from './modules/cutesv'
-        // include { svim_sv_filtering as filtersvim } from './modules/bcftools'
-        // include { survivor_sv_consensus as survivor } from './modules/survivor'
-    
+    main:    
         cutesv( bam, bam_index, genomeref )
         sniffles( bam, bam_index )
         svim( bam, bam_index, genomeref )
@@ -139,8 +112,6 @@ workflow call_svs_cli {
 */
 workflow medaka_variant_calling_cli {
 
-    // include { medaka_snv_calling } from './modules/medaka'
-
     genomeref = Channel.fromPath( params.genomeref, checkIfExists: true  )
     // genomeindex = Channel.fromPath( params.genomeref + "/indexes/minimap2-ont/genome.mmi" )
     aligned_reads = Channel.fromPath( params.aligned_bam )
@@ -149,24 +120,6 @@ workflow medaka_variant_calling_cli {
     medaka_snv( aligned_reads, aligned_reads_idx, genomeref )
 
 }
-
-
-// /* 
-// * Call small variants using PEPPER-Margin-DeepVariant
-// */
-// workflow pepper_deepvariant_calling {
-//     take:
-//         bam
-//         bam_index
-//         genomeref
-    
-//     main:
-//         // include { deepvariant_snv_calling as deepvariant } from './modules/deepvariant'
-//         deepvariant( bam, bam_index, genomeref )
-
-//     emit:
-//         snvs = deepvariant.out.indel_snv_vcf
-// }
 
 
 /* 
@@ -184,25 +137,6 @@ workflow pepper_deepvariant_calling_cli {
 }
 
 
-// /* 
-// * Run a de novo genome assembly using Shasta
-// */
-// workflow shasta_assembly {
-//     take:
-//         fastq
-//         config
-    
-//     main:
-//         // include { run_shasta_assembly as shasta } from './modules/shasta'
-        
-//         shasta( fastq, config )
-
-//     emit:
-//         assembly = shasta.out.assembly
-
-// }
-
-
 /* 
 * Run a de novo genome assembly using Shasta – CLI shortcut
 */
@@ -216,17 +150,12 @@ workflow shasta_assembly_cli {
 }
 
 
-
 workflow assembly_polishing {
     take:
         assembly
         fastq
     
     main:
-        // include { racon_assembly_polishing as racon } from './modules/racon'
-        // include { medaka_assembly_polishing as medaka } from './modules/medaka'
-        // include { minimap_alignment as minimap } from './modules/minimap2'
-
         minimap( assembly, fastq )
         racon( fastq, minimap.out.mapped_sam, assembly )
         // medaka_polish( fastq, racon.out.consensus )
@@ -234,6 +163,36 @@ workflow assembly_polishing {
 
     emit:
         polished_assembly = medaka_polish_parallel.out.consensus
+}
+
+
+
+workflow medaka_polish_parallel {
+    take:
+        fastqs
+        draft
+
+    main:
+        medaka_assembly_polish_align( fastqs, draft )
+        // draft.splitFasta( record: [id: true, seqString: false ]).view { it.id }
+        contigs = draft.splitFasta( record: [id: true, seqString: false ]).map { it.id }
+
+        medaka_assembly_polish_consensus( medaka_assembly_polish_align.out.calls_to_draft,
+                                         medaka_assembly_polish_align.out.calls_to_draft_index,
+                                         contigs )
+
+        medaka_assembly_polish_stitch( medaka_assembly_polish_consensus.out.probs.collect(), draft )
+    
+    emit:
+        consensus = medaka_assembly_polish_stitch.out.consensus
+}
+
+workflow medaka_polish_parallel_cli {
+
+    fastqs = Channel.fromPath( params.processed_reads )
+    draft = Channel.fromPath( params.genomeref )
+
+    medaka_assembly_polish_parallel( fastqs, draft )    
 }
 
 
@@ -247,10 +206,6 @@ workflow process_reads {
         ont_base
 
     main:
-    
-        // include { create_minimap_index } from './modules/minimap2'
-        // include { basecall_reads as basecall } from './modules/guppy'
-        // include { filter_reads as filter } from './modules/fastp'
 
         if ( params.rebasecall ) {
 
@@ -287,37 +242,6 @@ workflow process_reads_cli {
 
 
 /* 
-* Align reads to a reference genome using minimap2 and turn into sorted bam
-*/
-// workflow minimap_alignment {
-//     take: 
-//         genomeref
-//         fastqs
-
-//     main:
-//         // include { minimap_alignment as minimap } from './modules/minimap2'
-//         // include { sam_to_sorted_bam as samtobam } from './modules/samtools'
-    
-//         // use index if matched index is available, otherwise do on the fly
-//         genomeindex = file( file(params.genomeref).getParent() + "/" + file(params.genomeref).getSimpleName() + ".mmi" )
-//         if ( genomeindex.exists() ) {
-//             minimap( Channel.fromPath( genomeindex ), fastqs )
-//         } else {
-//             minimap( genomeref, fastqs )
-//         }
-
-//         // alignment and conversion into indexed sorted bam
-//         // samtobam( minimap.out.mapped_sam, genomeref )
-
-//     emit:
-//         sam = minimap.out.mapped_sam
-//         // sorted_bam = samtobam.out.sorted_bam
-//         // bam_index = samtobam.out.bam_index
-
-// }
-
-
-/* 
 * Align reads to a reference genome using minimap2 and turn into sorted bam – CLI shortcut
 */
 workflow minimap_alignment_cli {
@@ -330,6 +254,21 @@ workflow minimap_alignment_cli {
 }
 
 
+workflow minimap_align_bamout {
+    take:
+        genomeref
+        fastq
+    
+    main:
+        minimap( genomeref, fastq )
+        samtobam( minimap.out.mapped_sam, genomeref )
+
+    emit:
+        bam = samtobam.out.sorted_bam
+        idx = samtobam.out.bam_index
+
+}
+
 
 workflow lra_alignment_sv_calling {
     take: 
@@ -337,10 +276,6 @@ workflow lra_alignment_sv_calling {
         genomeref
 
     main:
-        // include { create_lra_index; lra_alignment } from './modules/lra'
-        // include { sam_to_sorted_bam } from './modules/samtools'
-        // include { cutesv_sv_calling } from './modules/cutesv'
-
         // genome indexing
         if ( !file( params.genomeref + "/indexes/lra-ont/genome.fa.gli" ).exists() || !file( params.genomeref + "/indexes/lra-ont/genome.fa.mmi" ).exists() ) {
             create_lra_index( genomeref )
@@ -371,11 +306,14 @@ workflow assembly_based_variant_calling {
         shasta( fastq, params.shasta_config )
         assembly_polishing( shasta.out.assembly, fastq)
 
-        minimap( assembly_polishing.out.polished_assembly, fastq )
-        samtobam( minimap.out.mapped_sam, assembly_polishing.out.polished_assembly )
+        minimap_align_bamout( assembly_polishing.out.polished_assembly, fastq )
+    //     minimap( assembly_polishing.out.polished_assembly, fastq )
+    //     samtobam( minimap.out.mapped_sam, assembly_polishing.out.polished_assembly )
 
-        call_svs( assembly_polishing.out.polished_assembly, samtobam.out.sorted_bam, samtobam.out.bam_index )
-        deepvariant( samtobam.out.sorted_bam, samtobam.out.bam_index, assembly_polishing.out.polished_assembly )
+        call_svs( assembly_polishing.out.polished_assembly, minimap_align_bamout.out.bam, minimap_align_bamout.out.idx )
+        deepvariant( minimap_align_bamout.out.bam, minimap_align_bamout.out.idx, assembly_polishing.out.polished_assembly )
+    //     call_svs( assembly_polishing.out.polished_assembly, samtobam.out.sorted_bam, samtobam.out.bam_index )
+    //     deepvariant( samtobam.out.sorted_bam, samtobam.out.bam_index, assembly_polishing.out.polished_assembly )
 
     emit:
         polished_assembly = assembly_polishing.out.polished_assembly
@@ -391,59 +329,19 @@ workflow reference_based_variant_calling {
         genomeref
     
     main:
-        minimap( genomeref, fastq )
-        samtobam( minimap.out.mapped_sam, genomeref )
+        // minimap( genomeref, fastq )
+        // samtobam( minimap.out.mapped_sam, genomeref )
+        minimap_align_bamout( genomeref, fastq )
 
-        call_svs( genomeref, samtobam.out.sorted_bam, samtobam.out.bam_index )
-        deepvariant( samtobam.out.sorted_bam, samtobam.out.bam_index, genomeref )
+        call_svs( genomeref, minimap_align_bamout.out.bam, minimap_align_bamout.out.idx )
+        // deepvariant( minimap_align_bamout.out.bam, minimap_align_bamout.out.idx, genomeref )
 
     emit:
         svs = call_svs.out.consensus
-        snvs = deepvariant.out.indel_snv_vcf
+        // snvs = deepvariant.out.indel_snv_vcf
 
 }
 
-
-workflow medaka_polish_parallel {
-    take:
-        fastqs
-        draft
-
-    main:
-        medaka_assembly_polish_align( fastqs, draft )
-        // draft.splitFasta( record: [id: true, seqString: false ]).view { it.id }
-        contigs = draft.splitFasta( record: [id: true, seqString: false ]).map { it.id }
-
-        medaka_assembly_polish_consensus( medaka_assembly_polish_align.out.calls_to_draft,
-                                         medaka_assembly_polish_align.out.calls_to_draft_index,
-                                         contigs )
-
-        medaka_assembly_polish_stitch( medaka_assembly_polish_consensus.out.probs.collect() )
-    
-    emit:
-        conensus = medaka_assembly_polish_stitch.out.consensus
-}
-
-workflow medaka_polish_parallel_cli {
-
-    fastqs = Channel.fromPath( params.processed_reads )
-    draft = Channel.fromPath( params.genomeref )
-
-    medaka_assembly_polish_parallel( fastqs, draft )    
-}
-
-
-// workflow trial_cli {
-
-//         // medaka_assembly_polishing_align( fastqs, draft )
-//         draft = Channel.fromPath( params.genomeref )
-//         draft.splitFasta( record: [id: true, seqString: false ]).map { it.id }
-
-//         // medaka_assembly_polishing_align( medaka_assembly_polishing_consensus.out.bam,
-//         //                                  medaka_assembly_polishing_consensus.out.bamindex,
-//         //                                  draft.splitFasta( record: [id: true, seqString: false ]) )
-    
-// }
 
 workflow {
 
