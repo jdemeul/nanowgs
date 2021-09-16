@@ -8,12 +8,13 @@ process cutesv_sv_calling {
     label 'time_mid'
     label 'cutesv'
 
-    publishDir path: "${params.outdir}/results/svs_cutesv/", mode: 'copy'
+    publishDir path: "${params.outdir}/results/svs_cutesv_${step}/", mode: 'copy'
 
     input:
     path sorted_bam
     path bam_index
     path genomeref
+    val step
     // path genomeindex
 
     output:

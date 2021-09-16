@@ -8,10 +8,11 @@ process svim_sv_filtering {
     label 'time_low'
     label 'bcftools'
 
-    publishDir path: "${params.outdir}/results/svs_svim/", mode: 'copy'
+    publishDir path: "${params.outdir}/results/svs_svim_${step}/", mode: 'copy'
 
     input:
     path svs
+    val step
 
     output:
     path "*_Q10.vcf", emit: sv_calls_q10
@@ -53,5 +54,29 @@ process variant_filtering {
     script:
     """
     bcftools view -f "PASS" -o ${variants.getSimpleName()}_PASS.vcf $variants
+    """
+}
+
+
+/* 
+* Variant call filtering for PASS variants
+*/
+process vcf_concat {
+    label 'cpu_low'
+    label 'mem_low'
+    label 'time_low'
+    label 'bcftools'
+
+    publishDir path: "${params.outdir}/results/snv_indel_deepvariant/", mode: 'copy'
+
+    input:
+    path variants
+
+    output:
+    path "*_merged_phased_deepvariant.vcf.gz", emit: merged_vcf
+
+    script:
+    """
+    bcftools concat -O z -o ${params.sampleid}_merged_phased_deepvariant.vcf.gz $variants
     """
 }

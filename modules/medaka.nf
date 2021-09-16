@@ -109,9 +109,9 @@ process medaka_assembly_polish_align {
 */
 process medaka_assembly_polish_consensus {
     label 'medaka'
-    // label 'cpu_low'
-    cpus = 2
-    label 'mem_low'
+    label 'cpu_low'
+    // cpus = 4
+    label 'mem_mid'
     label 'time_low'
 
     input:
@@ -127,11 +127,11 @@ process medaka_assembly_polish_consensus {
     # export CUDA_VISIBLE_DEVICES=${params.gpu_devices}
     medaka consensus \
         $bam \
-        ${contig}.hdf \
         --model ${params.medaka_polish_model} \
+        ${contig[0]}.hdf \
         --batch 200 \
         --threads $task.cpus \
-        --regions $contig
+        --regions ${contig.join(" ")}
     """
 
 }

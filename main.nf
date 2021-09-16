@@ -23,10 +23,13 @@ include { sniffles_sv_calling as sniffles } from './modules/sniffles'
 include { svim_sv_calling as svim } from './modules/svim'
 include { cutesv_sv_calling as cutesv } from './modules/cutesv'
 include { svim_sv_filtering as filtersvim } from './modules/bcftools'
+include { vcf_concat } from './modules/bcftools'
+
 include { survivor_sv_consensus as survivor } from './modules/survivor'
 
 include { medaka_snv_calling as medaka_snv } from './modules/medaka'
 include { deepvariant_snv_calling as deepvariant } from './modules/deepvariant'
+include { deepvariant_snv_calling_gpu_parallel as deepvariant_par } from './modules/deepvariant'
 
 include { run_shasta_assembly as shasta } from './modules/shasta'
 include { racon_assembly_polishing as racon } from './modules/racon'
@@ -71,17 +74,18 @@ workflow call_svs {
         genomeref
         bam
         bam_index
+        step
 
     main:    
-        cutesv( bam, bam_index, genomeref )
-        sniffles( bam, bam_index )
-        svim( bam, bam_index, genomeref )
-        filtersvim( svim.out.sv_calls )
+        cutesv( bam, bam_index, genomeref, step )
+        sniffles( bam, bam_index, step )
+        svim( bam, bam_index, genomeref, step )
+        filtersvim( svim.out.sv_calls, step )
 
         allsvs = cutesv.out.sv_calls
                     .mix( sniffles.out.sv_calls, filtersvim.out.sv_calls_q10 )
                     .collect()
-        survivor( allsvs )
+        survivor( allsvs, step )
     
     emit:
         cutesv = cutesv.out.sv_calls
@@ -103,7 +107,7 @@ workflow call_svs_cli {
     bam = Channel.fromPath( params.aligned_bam )
     bam_index = Channel.fromPath( params.aligned_bam + ".bai" )
     
-    call_svs( genomeref, bam, bam_index )
+    call_svs( genomeref, bam, bam_index, "cli" )
     
 }
 
@@ -132,7 +136,7 @@ workflow pepper_deepvariant_calling_cli {
     bam = Channel.fromPath( params.aligned_bam )
     bam_index = Channel.fromPath( params.aligned_bam + ".bai" )
 
-    deepvariant( bam, bam_index, genomeref )
+    deepvariant( bam, bam_index, genomeref, "cli" )
 
 }
 
@@ -166,6 +170,23 @@ workflow assembly_polishing {
 }
 
 
+workflow deepvariant_parallel {
+    take:
+        bam
+        bam_index
+        genomeref
+
+    main:
+        contigs = genomeref.splitFasta( record: [id: true, seqString: false ]).map { it.id }
+
+        deepvariant_par( bam, bam_index, genomeref, contigs )
+
+        vcf_concat( deepvariant_par.out.indel_snv_vcf.collect() )
+    
+    emit:
+        indel_snv_vcf = vcf_concat.out.merged_vcf
+}
+
 
 workflow medaka_polish_parallel {
     take:
@@ -175,7 +196,7 @@ workflow medaka_polish_parallel {
     main:
         medaka_assembly_polish_align( fastqs, draft )
         // draft.splitFasta( record: [id: true, seqString: false ]).view { it.id }
-        contigs = draft.splitFasta( record: [id: true, seqString: false ]).map { it.id }
+        contigs = draft.splitFasta( record: [id: true, seqString: false ]).map { it.id }.buffer( size: 10, remainder: true )
 
         medaka_assembly_polish_consensus( medaka_assembly_polish_align.out.calls_to_draft,
                                          medaka_assembly_polish_align.out.calls_to_draft_index,
@@ -306,19 +327,20 @@ workflow assembly_based_variant_calling {
         shasta( fastq, params.shasta_config )
         assembly_polishing( shasta.out.assembly, fastq)
 
-        minimap_align_bamout( assembly_polishing.out.polished_assembly, fastq )
+        // minimap_align_bamout( assembly_polishing.out.polished_assembly, fastq )
     //     minimap( assembly_polishing.out.polished_assembly, fastq )
     //     samtobam( minimap.out.mapped_sam, assembly_polishing.out.polished_assembly )
 
-        call_svs( assembly_polishing.out.polished_assembly, minimap_align_bamout.out.bam, minimap_align_bamout.out.idx )
-        deepvariant( minimap_align_bamout.out.bam, minimap_align_bamout.out.idx, assembly_polishing.out.polished_assembly )
+        // call_svs( assembly_polishing.out.polished_assembly, minimap_align_bamout.out.bam, minimap_align_bamout.out.idx, "assembly" )
+        // deepvariant( minimap_align_bamout.out.bam, minimap_align_bamout.out.idx, assembly_polishing.out.polished_assembly, "assembly" )
     //     call_svs( assembly_polishing.out.polished_assembly, samtobam.out.sorted_bam, samtobam.out.bam_index )
     //     deepvariant( samtobam.out.sorted_bam, samtobam.out.bam_index, assembly_polishing.out.polished_assembly )
 
     emit:
         polished_assembly = assembly_polishing.out.polished_assembly
-        svs = call_svs.out.consensus
-        snvs = deepvariant.out.indel_snv_vcf
+        // svs = call_svs.out.consensus
+        // snvs = deepvariant.out.indel_snv_vcf
+        // snvs_idx = deepvariant.out.indel_snv_vcf_index
 
 }
 
@@ -333,12 +355,18 @@ workflow reference_based_variant_calling {
         // samtobam( minimap.out.mapped_sam, genomeref )
         minimap_align_bamout( genomeref, fastq )
 
-        call_svs( genomeref, minimap_align_bamout.out.bam, minimap_align_bamout.out.idx )
-        // deepvariant( minimap_align_bamout.out.bam, minimap_align_bamout.out.idx, genomeref )
+        call_svs( genomeref, minimap_align_bamout.out.bam, minimap_align_bamout.out.idx, "reference" )
+
+        if ( params.with_gpu ) {
+            deepvar = deepvariant_parallel( minimap_align_bamout.out.bam, minimap_align_bamout.out.idx, genomeref )
+        } else {
+            deepvar = deepvariant( minimap_align_bamout.out.bam, minimap_align_bamout.out.idx, genomeref, "reference" )
+        }
 
     emit:
         svs = call_svs.out.consensus
-        // snvs = deepvariant.out.indel_snv_vcf
+        snvs = deepvar.out.indel_snv_vcf
+        snvs_idx = deepvar.out.indel_snv_vcf_index
 
 }
 

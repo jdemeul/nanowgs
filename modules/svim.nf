@@ -5,15 +5,16 @@
 process svim_sv_calling {
     label 'cpu_low'
     label 'mem_low'
-    label 'time_low'
+    label 'time_mid'
     label 'svim'
 
-    publishDir path: "${params.outdir}/results/svs_svim/", mode: 'copy'
+    publishDir path: "${params.outdir}/results/svs_svim_${step}/", mode: 'copy'
 
     input:
     path sorted_bam
     path bam_index
     path genomeref
+    val step
     // path genomeindex
 
     output:

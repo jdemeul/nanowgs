@@ -5,14 +5,15 @@
 process sniffles_sv_calling {
     label 'cpu_mid'
     label 'mem_mid'
-    label 'time_low'
+    label 'time_mid'
     label 'sniffles'
 
-    publishDir path: "${params.outdir}/results/svs_sniffles/", mode: 'copy'
+    publishDir path: "${params.outdir}/results/svs_sniffles_${step}/", mode: 'copy'
 
     input:
     path sorted_bam
     path bam_index
+    val step
 
     output:
     path "*_sniffles_svs.vcf", emit: sv_calls
