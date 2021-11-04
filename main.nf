@@ -196,7 +196,7 @@ workflow medaka_polish_parallel {
     main:
         medaka_assembly_polish_align( fastqs, draft )
         // draft.splitFasta( record: [id: true, seqString: false ]).view { it.id }
-        contigs = draft.splitFasta( record: [id: true, seqString: false ]).map { it.id }.buffer( size: 10, remainder: true )
+        contigs = draft.splitFasta( record: [id: true, seqString: false ]).map { it.id }.randomSample( 100000, 234 ).buffer( size: 50, remainder: true )
 
         medaka_assembly_polish_consensus( medaka_assembly_polish_align.out.calls_to_draft,
                                          medaka_assembly_polish_align.out.calls_to_draft_index,

@@ -109,9 +109,9 @@ process medaka_assembly_polish_align {
 */
 process medaka_assembly_polish_consensus {
     label 'medaka'
-    label 'cpu_low'
-    // cpus = 4
-    label 'mem_mid'
+    // label 'cpu_low'
+    cpus = 4
+    label 'mem_low'
     label 'time_low'
 
     input:
