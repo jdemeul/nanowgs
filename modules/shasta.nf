@@ -15,7 +15,7 @@ process run_shasta_assembly {
     path config
 
     output:
-    path "shasta_assembly/Assembly.fasta", emit: assembly
+    path "shasta_assembly/Assembly-Haploid.fasta", emit: assembly
     path "shasta_assembly/*"
 
     script:
@@ -26,9 +26,9 @@ process run_shasta_assembly {
         mv $fastq uncompressed_reads.fq
     fi
 
-    /opt/shasta-Linux-0.7.0 \
+    shasta-Linux-0.8.0 \
         --input uncompressed_reads.fq \
-        --conf $config \
+        --config $config \
         --assemblyDirectory ./shasta_assembly
     """
 }

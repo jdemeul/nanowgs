@@ -27,9 +27,11 @@ include { vcf_concat } from './modules/bcftools'
 
 include { survivor_sv_consensus as survivor } from './modules/survivor'
 
+include { megalodon } from './modules/megalodon'
+
 include { medaka_snv_calling as medaka_snv } from './modules/medaka'
 include { deepvariant_snv_calling as deepvariant } from './modules/deepvariant'
-include { deepvariant_snv_calling_gpu_parallel as deepvariant_par } from './modules/deepvariant'
+// include { deepvariant_snv_calling_gpu_parallel as deepvariant_par } from './modules/deepvariant'
 
 include { run_shasta_assembly as shasta } from './modules/shasta'
 include { racon_assembly_polishing as racon } from './modules/racon'
@@ -325,7 +327,7 @@ workflow assembly_based_variant_calling {
     main:
         // 1. Assembly-based pipeline
         shasta( fastq, params.shasta_config )
-        assembly_polishing( shasta.out.assembly, fastq)
+        // assembly_polishing( shasta.out.assembly, fastq)
 
         // minimap_align_bamout( assembly_polishing.out.polished_assembly, fastq )
     //     minimap( assembly_polishing.out.polished_assembly, fastq )
@@ -337,7 +339,7 @@ workflow assembly_based_variant_calling {
     //     deepvariant( samtobam.out.sorted_bam, samtobam.out.bam_index, assembly_polishing.out.polished_assembly )
 
     emit:
-        polished_assembly = assembly_polishing.out.polished_assembly
+        polished_assembly = shasta.out.assembly
         // svs = call_svs.out.consensus
         // snvs = deepvariant.out.indel_snv_vcf
         // snvs_idx = deepvariant.out.indel_snv_vcf_index
@@ -357,16 +359,19 @@ workflow reference_based_variant_calling {
 
         call_svs( genomeref, minimap_align_bamout.out.bam, minimap_align_bamout.out.idx, "reference" )
 
-        if ( params.with_gpu ) {
-            deepvar = deepvariant_parallel( minimap_align_bamout.out.bam, minimap_align_bamout.out.idx, genomeref )
-        } else {
-            deepvar = deepvariant( minimap_align_bamout.out.bam, minimap_align_bamout.out.idx, genomeref, "reference" )
-        }
+        // note that on the current VSC system (P100 and V100 nodes) GPU nodes
+        // lack sufficient memory to run PEPPER-DeepVariant genome-wide
+        // the current if statement reflects that and splits up the genome by chromosome to run as separate jobs
+        // if ( params.deepvariant_with_gpu ) {
+            // deepvar = deepvariant_parallel( minimap_align_bamout.out.bam, minimap_align_bamout.out.idx, genomeref )
+        // } else {
+            deepvariant( minimap_align_bamout.out.bam, minimap_align_bamout.out.idx, genomeref, "reference" )
+        // }
 
     emit:
         svs = call_svs.out.consensus
-        snvs = deepvar.out.indel_snv_vcf
-        snvs_idx = deepvar.out.indel_snv_vcf_index
+        snvs = deepvariant.out.indel_snv_vcf
+        snvs_idx = deepvariant.out.indel_snv_vcf_index
 
 }
 
@@ -380,6 +385,9 @@ workflow {
 
     // process reads
     process_reads( genomeref, ont_base )
+
+    // start megalodon
+    // megalodon( genomeref, ont_base )
 
     // assembly based variant calling
     assembly_based_variant_calling( process_reads.out.fastq_trimmed )

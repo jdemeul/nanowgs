@@ -6,11 +6,11 @@ process deepvariant_snv_calling {
     // label 'process_high'
     label 'deepvariant'
     // memory requirements are forcing this to be run on a bigmem node / superdome
-    label ( params.with_gpu ? 'with_gpus': 'bigmemnode' )
+    label ( params.deepvariant_with_gpu ? 'with_gpus': 'bigmemnode' )
     // label ( params.with_gpu ? null: 'mem_high' )
     // label ( params.with_gpu ? null: 'time_high' )
 
-    container ( params.with_gpu ? 'kishwars/pepper_deepvariant:r0.5-gpu': 'kishwars/pepper_deepvariant:r0.5' )
+    container ( params.deepvariant_with_gpu ? 'kishwars/pepper_deepvariant:r0.5-gpu': 'kishwars/pepper_deepvariant:r0.6' )
 
     publishDir path: "${params.outdir}/results/snv_indel_deepvariant_${step}/", mode: 'copy'
 
@@ -29,7 +29,7 @@ process deepvariant_snv_calling {
     path "*.visual_report.html"
 
     script:
-    if ( params.with_gpu ) 
+    if ( params.deepvariant_with_gpu ) 
         """
         # export CUDA_VISIBLE_DEVICES=${params.gpu_devices}
         run_pepper_margin_deepvariant call_variant \
@@ -38,8 +38,8 @@ process deepvariant_snv_calling {
             -o . \
             -p ${params.sampleid} \
             -s ${params.sampleid} \
-            --ont \
             -t 16 \
+            --ont_r9_guppy5_sup \
             -g \
             --phased_output
         #    -t $task.cpus \ number of CPUs on GPU node is fixed
@@ -53,7 +53,7 @@ process deepvariant_snv_calling {
             -p ${params.sampleid} \
             -s ${params.sampleid} \
             -t 36 \
-            --ont \
+            --ont_r9_guppy5_sup \
             --phased_output
         """
 }
@@ -87,7 +87,7 @@ process deepvariant_snv_calling_gpu_parallel {
         -o . \
         -p ${params.sampleid}_${region}_ \
         -s ${params.sampleid} \
-        --ont \
+        --ont_r9_guppy5_sup \
         -t 9 \
         -g \
         --phased_output \
