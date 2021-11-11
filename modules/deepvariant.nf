@@ -22,11 +22,10 @@ process deepvariant_snv_calling {
     // path genomerefidx
 
     output:
-    path "*phased.vcf.gz", emit: indel_snv_vcf
-    path "*phased.vcf.gz.tbi", emit: indel_snv_vcf_index
-    path "logs"
-    path "intermediate_files"
-    path "*.visual_report.html"
+    path "deepvar_out/*phased.vcf.gz", emit: indel_snv_vcf
+    path "deepvar_out/*phased.vcf.gz.tbi", emit: indel_snv_vcf_index
+    path "deepvar_out/intermediate_files"
+    path "deepvar_out/intermediate_files/PEPPER_MARGIN_DEEPVARIANT_OUTPUT.haplotagged.bam", emit: haplotagged_bam
 
     script:
     if ( params.deepvariant_with_gpu ) 
@@ -49,7 +48,7 @@ process deepvariant_snv_calling {
         run_pepper_margin_deepvariant call_variant \
             -b $sorted_bam \
             -f $genomeref \
-            -o . \
+            -o deepvar_out \
             -p ${params.sampleid} \
             -s ${params.sampleid} \
             -t 36 \

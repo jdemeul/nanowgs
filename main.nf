@@ -17,7 +17,7 @@ include { basecall_reads as basecall } from './modules/guppy'
 include { filter_reads as filter } from './modules/fastp'
 
 include { minimap_alignment as minimap } from './modules/minimap2'
-include { sam_to_sorted_bam as samtobam } from './modules/samtools'
+include { sam_to_sorted_bam as samtobam; get_haplotype_readids } from './modules/samtools'
 
 include { sniffles_sv_calling as sniffles } from './modules/sniffles'
 include { svim_sv_calling as svim } from './modules/svim'
@@ -27,7 +27,7 @@ include { vcf_concat } from './modules/bcftools'
 
 include { survivor_sv_consensus as survivor } from './modules/survivor'
 
-include { megalodon } from './modules/megalodon'
+include { megalodon; megalodon_aggregate } from './modules/megalodon'
 
 include { medaka_snv_calling as medaka_snv } from './modules/medaka'
 include { deepvariant_snv_calling as deepvariant } from './modules/deepvariant'
@@ -37,6 +37,10 @@ include { run_shasta_assembly as shasta } from './modules/shasta'
 include { racon_assembly_polishing as racon } from './modules/racon'
 include { medaka_assembly_polishing as medaka_polish } from './modules/medaka'
 include { medaka_assembly_polish_align; medaka_assembly_polish_stitch; medaka_assembly_polish_consensus } from './modules/medaka'
+
+include { hapdup } from './modules/hapdup'
+include { dipdiff } from './modules/dipdiff'
+include { dipdiff as dipdiff_reference } from './modules/dipdiff'
 
 include { create_lra_index; lra_alignment } from './modules/lra'
 
@@ -372,8 +376,36 @@ workflow reference_based_variant_calling {
         svs = call_svs.out.consensus
         snvs = deepvariant.out.indel_snv_vcf
         snvs_idx = deepvariant.out.indel_snv_vcf_index
+        haplotagged_bam = deepvariant.out.haplotagged_bam
 
 }
+
+
+workflow haploid_to_diploid_assembly {
+    take:
+        fastq
+        haploid_assembly
+        reference
+    
+    main:
+        minimap_align_bamout( haploid_assembly, fastq )
+
+        hapdup( minimap_align_bamout.out.bam, minimap_align_bamout.out.idx, haploid_assembly )
+
+        dipdiff( haploid_assembly, hapdup.out.hap1, hapdup.out.hap2 )
+        dipdiff_reference( reference, hapdup.out.hap1, hapdup.out.hap2 )
+
+}
+
+// workflow phased_methylation_calls {
+//     take:
+//         ont_base
+//         genomeref
+//         haplotagged_bam
+    
+//     main:
+//         megalodon( genomeref, ont_base )
+// }
 
 
 workflow {
@@ -387,7 +419,7 @@ workflow {
     process_reads( genomeref, ont_base )
 
     // start megalodon
-    // megalodon( genomeref, ont_base )
+    megalodon( genomeref, ont_base )
 
     // assembly based variant calling
     assembly_based_variant_calling( process_reads.out.fastq_trimmed )
@@ -395,8 +427,13 @@ workflow {
     // 2. Reference alignment-based pipeline
     reference_based_variant_calling( process_reads.out.fastq_trimmed, genomeref )
 
+    // snv_indel = reference_based_variant_calling.out.snvs
+    haploid_to_diploid_assembly( process_reads.out.fastq_trimmed, genomeref, assembly_based_variant_calling.out.polished_assembly )
     // lra_alignment_sv_calling( process_reads.out.fastq_trimmed, genomeref )
     // minimap_alignment_snv_calling( process_reads.out.fastq_trimmed, genomeref )
+
+    get_haplotype_readids( reference_based_variant_calling.out.haplotagged_bam )
+    megalodon_aggregate( megalodon.out.megalodon_results, get_haplotype_readids.out.hap1ids, get_haplotype_readids.out.hap2ids )
 
 }
 

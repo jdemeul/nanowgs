@@ -39,6 +39,37 @@ process sam_to_sorted_bam {
 }
 
 
+
+/* 
+* Sam to sorted bam conversion using samtools
+*/
+process get_haplotype_readids {
+    label 'cpu_low'
+    label 'mem_low'
+    label 'time_low'
+    label 'samtools'
+
+    publishDir path: "${params.outdir}/${params.sampleid}/results/${task.process}/", mode: 'copy'
+
+    input:
+    path haplotagged_bam
+
+    output:
+    path "hap1ids", emit: hap1ids
+    path "hap2ids", emit: hap2ids
+
+    script:
+    """
+    samtools view -d "HP:0" $haplotagged_bam | cut -f 1 | shuf > hap0ids
+    split -n l/2 hap0ids
+    mv xaa hap1ids
+    mv xab hap2ids
+    samtools view -d "HP:1" $haplotagged_bam | cut -f 1 >> hap1ids
+    samtools view -d "HP:2" $haplotagged_bam | cut -f 1 >> hap2ids
+    """
+
+}
+
 // /* 
 // * Index a fasta file
 // */
