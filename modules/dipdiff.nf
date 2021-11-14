@@ -16,7 +16,7 @@ process dipdiff {
     path hap2_fasta
 
     output:
-    path ""
+    path "dipdiff"
 
     script:
     """
