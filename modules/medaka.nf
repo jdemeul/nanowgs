@@ -8,7 +8,7 @@ process medaka_snv_calling {
     label ( params.with_gpu ? null: 'mem_high')
     label ( params.with_gpu ? null: 'time_high')
 
-    publishDir path: "${params.outdir}/results/", mode: 'copy'
+    publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
 
     input:
     path sorted_bam
@@ -47,7 +47,7 @@ process medaka_assembly_polishing {
     label ( params.with_gpu ? null: 'mem_mid')
     label ( params.with_gpu ? null: 'time_high')
 
-    publishDir path: "${params.outdir}/results/", mode: 'copy'
+    publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
 
     input:
     path fastqs

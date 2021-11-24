@@ -8,7 +8,7 @@ process hapdup {
     label 'time_mid'
     label 'hapdup'
 
-    publishDir path: "${params.outdir}/${params.sampleid}/results/${task.process}/", mode: 'copy'
+    publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
 
     input:
     path bam
@@ -26,6 +26,7 @@ process hapdup {
     hapdup -t $task.cpus \
         --assembly $assembly \
         --bam $bam \
+	    --rtype ont \
         --out-dir hapdup
     """
 

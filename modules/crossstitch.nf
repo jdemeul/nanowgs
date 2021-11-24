@@ -9,7 +9,7 @@ process create_personal_genome {
     label 'time_low'
     label 'deepvariant'
 
-    publishDir path: "${params.outdir}/results/crossstitch", mode: 'copy'
+    publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
 
     input:
     path phased_snps

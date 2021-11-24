@@ -12,13 +12,15 @@ process deepvariant_snv_calling {
 
     container ( params.deepvariant_with_gpu ? 'kishwars/pepper_deepvariant:r0.5-gpu': 'kishwars/pepper_deepvariant:r0.6' )
 
-    publishDir path: "${params.outdir}/results/snv_indel_deepvariant_${step}/", mode: 'copy'
+    stageInMode 'copy'
+
+    publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
 
     input:
     path sorted_bam
     path bam_index
     path genomeref
-    val step
+    // val step
     // path genomerefidx
 
     output:
@@ -95,38 +97,38 @@ process deepvariant_snv_calling_gpu_parallel {
 }
 
 
-/* 
-* Assembly polishing using PEPPER
-* NOT IMPLEMENTED YET
-*/
-process pepper_assembly_polishing {
-    label 'pepper'
-    label ( params.with_gpu ? 'with_gpu': 'cpu_high')
-    label ( params.with_gpu ? null: 'mem_high')
-    label ( params.with_gpu ? null: 'time_mid')
+// /* 
+// * Assembly polishing using PEPPER
+// * NOT IMPLEMENTED YET
+// */
+// process pepper_assembly_polishing {
+//     label 'pepper'
+//     label ( params.with_gpu ? 'with_gpu': 'cpu_high')
+//     label ( params.with_gpu ? null: 'mem_high')
+//     label ( params.with_gpu ? null: 'time_mid')
 
-    publishDir path: "${params.outdir}/results/pepper_polished_assembly/", mode: 'copy'
+//     publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
 
-    input:
-    path sorted_bam
-    path bam_index
-    path assemblyref
+//     input:
+//     path sorted_bam
+//     path bam_index
+//     path assemblyref
 
-    output:
-    path "*.vcf.gz", emit: indel_snv_vcf
+//     output:
+//     path "*.vcf.gz", emit: indel_snv_vcf
 
-    script:
-    """
-    run_pepper_margin_deepvariant polish_assembly \
-        -b $sorted_bam \
-        -f $assemblyref \
-        -o . \
-        -t $task.cpus \
-        -p ${params.sampleid} \
-        -g \
-        --ont
-    """
-}
+//     script:
+//     """
+//     run_pepper_margin_deepvariant polish_assembly \
+//         -b $sorted_bam \
+//         -f $assemblyref \
+//         -o . \
+//         -t $task.cpus \
+//         -p ${params.sampleid} \
+//         -g \
+//         --ont
+//     """
+// }
 
 
 // singularity run --nv -B /staging/leuven/stg_00002/lcb/ \

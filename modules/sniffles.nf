@@ -8,12 +8,12 @@ process sniffles_sv_calling {
     label 'time_mid'
     label 'sniffles'
 
-    publishDir path: "${params.outdir}/results/svs_sniffles_${step}/", mode: 'copy'
+    publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
 
     input:
     path sorted_bam
     path bam_index
-    val step
+    // val step
 
     output:
     path "*_sniffles_svs.vcf", emit: sv_calls

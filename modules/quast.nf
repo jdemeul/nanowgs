@@ -2,13 +2,13 @@
 /* 
 * Assess a de novo genome assembly using Quast
 */
-process run_shasta_assembly {
+process run_quast {
     label 'cpu_high'
     label 'mem_high'
     label 'time_mid'
     label 'quast'
 
-    publishDir path: "${params.outdir}/results/", mode: 'copy'
+    publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
 
     input:
     path assembly

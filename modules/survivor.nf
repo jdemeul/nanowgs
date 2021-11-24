@@ -8,11 +8,11 @@ process survivor_sv_consensus {
     label 'time_low'
     label 'survivor'
 
-    publishDir path: "${params.outdir}/results/svs_consensus_${step}/", mode: 'copy'
+    publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
 
     input:
     path vcfs
-    val step
+    // val step
 
     output:
     path "*_survivor_sv_consensus.vcf", emit: sv_consensus

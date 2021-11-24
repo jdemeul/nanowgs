@@ -9,7 +9,7 @@ process racon_assembly_polishing {
     label ( workflow.profile.contains('qsub') ? null: 'mem_high' )
     label ( workflow.profile.contains('qsub') ? null: 'time_mid' )
 
-    publishDir path: "${params.outdir}/results/racon/", mode: 'copy'
+    publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
             // saveAs: { filename -> "racon_consensus.fa" }
     input:
     path fastq

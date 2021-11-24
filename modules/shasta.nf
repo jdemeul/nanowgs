@@ -8,7 +8,7 @@ process run_shasta_assembly {
     label ( workflow.profile.contains('qsub') ? null: 'mem_high' )
     label ( workflow.profile.contains('qsub') ? null: 'time_mid' )
 
-    publishDir path: "${params.outdir}/results/", mode: 'copy'
+    publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
 
     input:
     path fastq
@@ -16,7 +16,7 @@ process run_shasta_assembly {
 
     output:
     path "shasta_assembly/Assembly-Haploid.fasta", emit: assembly
-    path "shasta_assembly/*"
+    path "shasta_assembly"
 
     script:
     """

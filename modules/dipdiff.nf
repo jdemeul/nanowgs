@@ -3,12 +3,12 @@
 * Sam to sorted bam conversion using samtools
 */
 process dipdiff {
-    label 'cpu_mid'
-    label 'mem_mid'
-    label 'time_mid'
+    label 'cpu_high'
+    label 'mem_high'
+    label 'time_low'
     label 'dipdiff'
 
-    publishDir path: "${params.outdir}/${params.sampleid}/results/${task.process}/", mode: 'copy'
+    publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
 
     input:
     path reference
@@ -20,7 +20,7 @@ process dipdiff {
 
     script:
     """
-    dipdiff.py -t $task.cpus \
+    dipdiff.py -t 20 \
         --reference $reference \
         --pat $hap1_fasta \
         --mat $hap2_fasta \

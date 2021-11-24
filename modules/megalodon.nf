@@ -6,7 +6,7 @@ process megalodon {
     label 'megalodon'
     label 'with_p100node'
 
-    publishDir path: "${params.outdir}/${params.sampleid}/results/megalodon_${task.process}/", mode: 'copy'
+    publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
 
     input:
     path genomeref
@@ -33,7 +33,7 @@ process megalodon {
         --guppy-timeout 120 \
         --output-directory ./megalodon_results \
         --num-read-enumeration-threads 1 \
-        --num-extract-signal-processes 1 \
+        --num-extract-signal-processes 2 \
         $reads
         ## --outputs mod_mappings per_read_mods variant_mappings per_read_variants --chunk_size 3000 \
     """
@@ -69,7 +69,7 @@ process megalodon_withvariants {
     label 'megalodon'
     label 'gpu_debug'
 
-    publishDir path: "${params.outdir}/${params.sampleid}/results/megalodon_${task.process}/", mode: 'copy'
+    publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
 
     input:
     path genomeref
@@ -108,7 +108,7 @@ process megalodon_aggregate {
     label 'mem_mid'
     label 'time_high'
 
-    publishDir path: "${params.outdir}/${params.sampleid}/results/${task.process}/", mode: 'copy'
+    publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
 
     input:
     path megalodon_results

@@ -8,13 +8,13 @@ process filter_reads {
     label 'time_mid'
     label 'fastp'
 
-    publishDir path: "${params.outdir}/results/fastq/", mode: 'copy'
+    // publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
 
     input:
     path fastqs
 
     output:
-    path "*_trimmed.fastq.gz", emit: fastq_trimmed
+    path "*_trimmed.fastq", emit: fastq_trimmed
     path "fastp*"
 
     script:
@@ -24,7 +24,7 @@ process filter_reads {
         --average_qual ${params.min_read_qscore} --qualified_quality_phred 0 --unqualified_percent_limit 100 --n_base_limit 50 \
         --length_required 100 \
         --trim_front1 30 --trim_tail1 15 \
-        -o ${params.sampleid}_trimmed.fastq.gz \
+        -o ${params.sampleid}_trimmed.fastq \
         --thread $task.cpus 
     """
 }

@@ -8,8 +8,9 @@ process sam_to_sorted_bam {
     label 'time_mid'
     label 'samtools'
 
-    publishDir path: "${params.outdir}/results/bam/", mode: 'copy',
-               saveAs: { item -> item.matches("(.*)minimap2(.*)") ? item : null }
+    publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
+    // publishDir path: "${params.outdir}/results/bam/", mode: 'copy',
+    //            saveAs: { item -> item.matches("(.*)minimap2(.*)") ? item : null }
 
     input:
     path mapped_sam
@@ -49,7 +50,7 @@ process get_haplotype_readids {
     label 'time_low'
     label 'samtools'
 
-    publishDir path: "${params.outdir}/${params.sampleid}/results/${task.process}/", mode: 'copy'
+    publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
 
     input:
     path haplotagged_bam
@@ -57,15 +58,16 @@ process get_haplotype_readids {
     output:
     path "hap1ids", emit: hap1ids
     path "hap2ids", emit: hap2ids
+    path "hap0ids"
 
     script:
     """
-    samtools view -d "HP:0" $haplotagged_bam | cut -f 1 | shuf > hap0ids
+    samtools view -@ $task.cpus -d "HP:0" $haplotagged_bam | cut -f 1 | shuf > hap0ids
     split -n l/2 hap0ids
     mv xaa hap1ids
     mv xab hap2ids
-    samtools view -d "HP:1" $haplotagged_bam | cut -f 1 >> hap1ids
-    samtools view -d "HP:2" $haplotagged_bam | cut -f 1 >> hap2ids
+    samtools view -@ $task.cpus -d "HP:1" $haplotagged_bam | cut -f 1 >> hap1ids
+    samtools view -@ $task.cpus -d "HP:2" $haplotagged_bam | cut -f 1 >> hap2ids
     """
 
 }

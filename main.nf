@@ -15,6 +15,7 @@ nextflow.enable.dsl=2
 
 include { basecall_reads as basecall } from './modules/guppy'
 include { filter_reads as filter } from './modules/fastp'
+include { parallel_gzip as pigz } from './modules/pigz'
 
 include { minimap_alignment as minimap } from './modules/minimap2'
 include { sam_to_sorted_bam as samtobam; get_haplotype_readids } from './modules/samtools'
@@ -80,18 +81,18 @@ workflow call_svs {
         genomeref
         bam
         bam_index
-        step
+        // step
 
     main:    
-        cutesv( bam, bam_index, genomeref, step )
-        sniffles( bam, bam_index, step )
-        svim( bam, bam_index, genomeref, step )
-        filtersvim( svim.out.sv_calls, step )
+        cutesv( bam, bam_index, genomeref )
+        sniffles( bam, bam_index )
+        svim( bam, bam_index, genomeref )
+        filtersvim( svim.out.sv_calls )
 
         allsvs = cutesv.out.sv_calls
                     .mix( sniffles.out.sv_calls, filtersvim.out.sv_calls_q10 )
                     .collect()
-        survivor( allsvs, step )
+        survivor( allsvs )
     
     emit:
         cutesv = cutesv.out.sv_calls
@@ -142,7 +143,7 @@ workflow pepper_deepvariant_calling_cli {
     bam = Channel.fromPath( params.aligned_bam )
     bam_index = Channel.fromPath( params.aligned_bam + ".bai" )
 
-    deepvariant( bam, bam_index, genomeref, "cli" )
+    deepvariant( bam, bam_index, genomeref )
 
 }
 
@@ -248,6 +249,8 @@ workflow process_reads {
         } else {
             filter( Channel.fromPath( params.ont_base_dir + "**.fastq.gz" ).collect() )
         }
+
+        pigz( filter.out.fastq_trimmed )
 
     emit:
         fastq_trimmed = filter.out.fastq_trimmed
@@ -361,7 +364,7 @@ workflow reference_based_variant_calling {
         // samtobam( minimap.out.mapped_sam, genomeref )
         minimap_align_bamout( genomeref, fastq )
 
-        call_svs( genomeref, minimap_align_bamout.out.bam, minimap_align_bamout.out.idx, "reference" )
+        call_svs( genomeref, minimap_align_bamout.out.bam, minimap_align_bamout.out.idx )
 
         // note that on the current VSC system (P100 and V100 nodes) GPU nodes
         // lack sufficient memory to run PEPPER-DeepVariant genome-wide
@@ -369,7 +372,7 @@ workflow reference_based_variant_calling {
         // if ( params.deepvariant_with_gpu ) {
             // deepvar = deepvariant_parallel( minimap_align_bamout.out.bam, minimap_align_bamout.out.idx, genomeref )
         // } else {
-            deepvariant( minimap_align_bamout.out.bam, minimap_align_bamout.out.idx, genomeref, "reference" )
+            deepvariant( minimap_align_bamout.out.bam, minimap_align_bamout.out.idx, genomeref )
         // }
 
     emit:
@@ -384,8 +387,8 @@ workflow reference_based_variant_calling {
 workflow haploid_to_diploid_assembly {
     take:
         fastq
-        haploid_assembly
         reference
+        haploid_assembly
     
     main:
         minimap_align_bamout( haploid_assembly, fastq )

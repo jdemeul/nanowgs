@@ -8,11 +8,11 @@ process svim_sv_filtering {
     label 'time_low'
     label 'bcftools'
 
-    publishDir path: "${params.outdir}/results/svs_svim_${step}/", mode: 'copy'
+    publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
 
     input:
     path svs
-    val step
+    // val step
 
     output:
     path "*_Q10.vcf", emit: sv_calls_q10
@@ -34,7 +34,7 @@ process variant_filtering {
     label 'time_low'
     label 'bcftools'
 
-    publishDir path: "${params.outdir}/results/", mode: 'copy'
+    publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
     // ,
         // saveAs: { item -> 
         //                 if ( item.matches("(.*)lra(.*)" ) {
@@ -67,7 +67,7 @@ process vcf_concat {
     label 'time_low'
     label 'bcftools'
 
-    publishDir path: "${params.outdir}/results/snv_indel_deepvariant/", mode: 'copy'
+    publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
 
     input:
     path variants
