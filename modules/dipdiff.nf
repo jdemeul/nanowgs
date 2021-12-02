@@ -20,7 +20,7 @@ process dipdiff {
 
     script:
     """
-    dipdiff.py -t 20 \
+    dipdiff.py -t 18 \
         --reference $reference \
         --pat $hap1_fasta \
         --mat $hap2_fasta \
