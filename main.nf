@@ -246,6 +246,8 @@ workflow process_reads {
 
             basecall( Channel.fromPath( params.ont_base_dir ), genomeref )
             filter( basecall.out.fastqs.collect() )
+        } else if ( params.basecall_dir ) {
+            filter( Channel.fromPath( params.basecall_dir + "**.fastq.gz" ).collect() )
         } else {
             filter( Channel.fromPath( params.ont_base_dir + "**.fastq.gz" ).collect() )
         }
@@ -415,6 +417,7 @@ workflow {
 
     genomeref = Channel.fromPath( params.genomeref, checkIfExists: true  )
     ont_base = Channel.fromPath( params.ont_base_dir, checkIfExists: true )
+    // basecalls = Channel.fromPath( params.basecall_dir )
     // reads = Channel.fromPath( params.processed_reads, checkIfExists: true )
     // genomeindex = Channel.fromPath( params.genomeref + "/indexes/minimap2-ont/genome.mmi" )
 

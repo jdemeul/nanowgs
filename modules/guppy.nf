@@ -19,7 +19,7 @@ process basecall_reads {
 
     script:
     """
-    /opt/ont-guppy/guppy_basecaller \
+    /opt/ont-guppy/bin/guppy_basecaller \
         -i $ont_base \
         -s ./basecalls \
         -c ${params.guppy_config} \

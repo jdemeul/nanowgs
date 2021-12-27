@@ -10,7 +10,7 @@ process deepvariant_snv_calling {
     // label ( params.with_gpu ? null: 'mem_high' )
     // label ( params.with_gpu ? null: 'time_high' )
 
-    container ( params.deepvariant_with_gpu ? 'kishwars/pepper_deepvariant:r0.5-gpu': 'kishwars/pepper_deepvariant:r0.6' )
+    container ( params.deepvariant_with_gpu ? 'kishwars/pepper_deepvariant:r0.7-gpu': 'kishwars/pepper_deepvariant:r0.7' )
 
     stageInMode 'copy'
 
@@ -68,7 +68,7 @@ process deepvariant_snv_calling_gpu_parallel {
     label 'deepvariant'
     label 'with_p100'
 
-    container 'kishwars/pepper_deepvariant:r0.5-gpu'
+    container 'kishwars/pepper_deepvariant:r0.7-gpu'
 
     input:
     path sorted_bam

@@ -17,26 +17,49 @@ process megalodon {
     path "megalodon_results", emit: megalodon_results
 
     script:
-    """
-    export SINGULARITYENV_CUDA_VISIBLE_DEVICES=${params.gpu_devices}
-    megalodon \
-        --devices "cuda:all" \
-        --guppy-server-path /opt/ont-guppy/bin/guppy_basecall_server \
-        --guppy-params "-d /rerio/basecall_models/" \
-        --guppy-config ${params.megalodon_model} \
-        --reference $genomeref \
-        --outputs basecalls mod_mappings per_read_mods \
-        --mappings-format bam \
-        --mod-motif m CG 0 \
-        --processes 16 \
-        --guppy-concurrent-reads 40 \
-        --guppy-timeout 120 \
-        --output-directory ./megalodon_results \
-        --num-read-enumeration-threads 1 \
-        --num-extract-signal-processes 2 \
-        $reads
-        ## --outputs mod_mappings per_read_mods variant_mappings per_read_variants --chunk_size 3000 \
-    """
+
+    if ( params.megalodon_modmotif2 )
+        """
+        export SINGULARITYENV_CUDA_VISIBLE_DEVICES=${params.gpu_devices}
+        megalodon \
+            --devices "cuda:all" \
+            --guppy-server-path /opt/ont-guppy/bin/guppy_basecall_server \
+            --guppy-params "-d /rerio/basecall_models/" \
+            --guppy-config ${params.megalodon_model} \
+            --reference $genomeref \
+            --outputs basecalls mod_mappings per_read_mods \
+            --mappings-format bam \
+            --mod-motif ${params.megalodon_modmotif} \
+            --mod-motif ${params.megalodon_modmotif2} \
+            --processes 16 \
+            --guppy-concurrent-reads 40 \
+            --guppy-timeout 120 \
+            --output-directory ./megalodon_results \
+            --num-read-enumeration-threads 1 \
+            --num-extract-signal-processes 2 \
+            $reads
+            ## --outputs mod_mappings per_read_mods variant_mappings per_read_variants --chunk_size 3000 \
+        """
+    else
+        """
+        export SINGULARITYENV_CUDA_VISIBLE_DEVICES=${params.gpu_devices}
+        megalodon \
+            --devices "cuda:all" \
+            --guppy-server-path /opt/ont-guppy/bin/guppy_basecall_server \
+            --guppy-params "-d /rerio/basecall_models/" \
+            --guppy-config ${params.megalodon_model} \
+            --reference $genomeref \
+            --outputs basecalls mod_mappings per_read_mods \
+            --mappings-format bam \
+            --mod-motif ${params.megalodon_modmotif} \
+            --processes 16 \
+            --guppy-concurrent-reads 40 \
+            --guppy-timeout 120 \
+            --output-directory ./megalodon_results \
+            --num-read-enumeration-threads 1 \
+            --num-extract-signal-processes 2 \
+            $reads
+        """
 }
         // --mod-motif Y A 0 \
         // --mod-motif Z CG 0 \
@@ -106,7 +129,7 @@ process megalodon_aggregate {
     label 'megalodon'
     label 'cpu_high'
     label 'mem_mid'
-    label 'time_high'
+    label 'time_mid'
 
     publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
 
