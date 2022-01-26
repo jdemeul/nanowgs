@@ -80,3 +80,27 @@ process vcf_concat {
     bcftools concat -O z -o ${params.sampleid}_merged_phased_deepvariant.vcf.gz $variants
     """
 }
+
+
+/* 
+* Variant stats
+*/
+process vcf_stats {
+    label 'cpu_low'
+    label 'mem_low'
+    label 'time_low'
+    label 'bcftools'
+
+    publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
+
+    input:
+    path variants
+
+    output:
+    path "*.vchk", emit: vcfstats
+
+    script:
+    """
+    bcftools stats -f PASS $variants > ./${variants.getSimpleName()}.vchk
+    """
+}

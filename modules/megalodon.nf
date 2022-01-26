@@ -18,11 +18,11 @@ process megalodon {
 
     script:
 
-    if ( params.megalodon_modmotif2 )
+    if ( params.megalodon_modmotif2 != "none" )
         """
-        export SINGULARITYENV_CUDA_VISIBLE_DEVICES=${params.gpu_devices}
+        # export SINGULARITYENV_CUDA_VISIBLE_DEVICES=${params.gpu_devices}
         megalodon \
-            --devices "cuda:all" \
+            --devices ${params.gpu_devices} \
             --guppy-server-path /opt/ont-guppy/bin/guppy_basecall_server \
             --guppy-params "-d /rerio/basecall_models/" \
             --guppy-config ${params.megalodon_model} \
@@ -42,9 +42,9 @@ process megalodon {
         """
     else
         """
-        export SINGULARITYENV_CUDA_VISIBLE_DEVICES=${params.gpu_devices}
+        # export SINGULARITYENV_CUDA_VISIBLE_DEVICES=${params.gpu_devices}
         megalodon \
-            --devices "cuda:all" \
+            --devices ${params.gpu_devices} \
             --guppy-server-path /opt/ont-guppy/bin/guppy_basecall_server \
             --guppy-params "-d /rerio/basecall_models/" \
             --guppy-config ${params.megalodon_model} \
@@ -128,8 +128,8 @@ process megalodon_withvariants {
 process megalodon_aggregate {
     label 'megalodon'
     label 'cpu_high'
-    label 'mem_mid'
-    label 'time_mid'
+    label 'mem_high'
+    label 'time_high'
 
     publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
 
