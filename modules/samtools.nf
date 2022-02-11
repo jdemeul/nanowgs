@@ -8,9 +8,9 @@ process sam_to_sorted_bam {
     label 'time_mid'
     label 'samtools'
 
-    publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
-    // publishDir path: "${params.outdir}/results/bam/", mode: 'copy',
-    //            saveAs: { item -> item.matches("(.*)minimap2(.*)") ? item : null }
+    // publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
+    // publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy',
+    //            saveAs: { item -> item.matches("(.*)stats") ? item : null }
 
     input:
     path mapped_sam
@@ -20,7 +20,7 @@ process sam_to_sorted_bam {
     output:
     path "*.bam", emit: sorted_bam
     path "*.bai", emit: bam_index
-    path "*stats"
+    // path "*stats"
 
     script:
     def samtools_mem = Math.floor(task.memory.getMega() / task.cpus ) as int
@@ -32,8 +32,8 @@ process sam_to_sorted_bam {
         --reference $genomeref \
         -T sorttmp_${params.sampleid}_sorted \
         $mapped_sam
-    samtools flagstat ${params.sampleid}_sorted.bam > ${params.sampleid}_sorted.bam.flagstats
-    samtools idxstats ${params.sampleid}_sorted.bam > ${params.sampleid}_sorted.bam.idxstats
+    # samtools flagstat ${params.sampleid}_sorted.bam > ${params.sampleid}_sorted.bam.flagstats
+    # samtools idxstats ${params.sampleid}_sorted.bam > ${params.sampleid}_sorted.bam.idxstats
     # samtools stats ${params.sampleid}_sorted.bam > ${params.sampleid}_sorted.bam.stats
     """
 
@@ -71,6 +71,30 @@ process get_haplotype_readids {
     """
 
 }
+
+
+/* 
+* Sam to sorted bam conversion using samtools
+*/
+process index_bam {
+    label 'cpu_low'
+    label 'mem_low'
+    label 'time_low'
+    label 'samtools'
+
+    input:
+    path mapped_bam
+
+    output:
+    path "*.bam", emit: bam
+    path "*.bai", emit: bam_index
+
+    """
+    samtools index -b -@ $task.cpus $mapped_bam
+    """
+
+}
+
 
 // /* 
 // * Index a fasta file

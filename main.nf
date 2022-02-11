@@ -18,7 +18,7 @@ include { filter_reads as filter } from './modules/fastp'
 include { parallel_gzip as pigz } from './modules/pigz'
 
 include { minimap_alignment as minimap } from './modules/minimap2'
-include { sam_to_sorted_bam as samtobam; get_haplotype_readids } from './modules/samtools'
+include { sam_to_sorted_bam as samtobam; get_haplotype_readids; index_bam } from './modules/samtools'
 
 include { sniffles_sv_calling as sniffles } from './modules/sniffles'
 include { svim_sv_calling as svim } from './modules/svim'
@@ -85,7 +85,7 @@ workflow call_svs {
 
     main:    
         cutesv( bam, bam_index, genomeref )
-        sniffles( bam, bam_index )
+        sniffles( bam, bam_index, genomeref )
         svim( bam, bam_index, genomeref )
         filtersvim( svim.out.sv_calls )
 
@@ -148,17 +148,17 @@ workflow pepper_deepvariant_calling_cli {
 }
 
 
-/* 
-* Run a de novo genome assembly using Shasta – CLI shortcut
-*/
-workflow shasta_assembly_cli {
+// /* 
+// * Run a de novo genome assembly using Shasta – CLI shortcut
+// */
+// workflow shasta_assembly_cli {
 
-    fastq = Channel.fromPath( params.processed_reads )
-    config = Channel.fromPath( params.shasta_config )
+//     fastq = Channel.fromPath( params.processed_reads )
+//     config = Channel.fromPath( params.shasta_config )
 
-    shasta( fastq, config )
+//     shasta( fastq, config )
 
-}
+// }
 
 
 workflow assembly_polishing {
@@ -335,7 +335,7 @@ workflow assembly_based_variant_calling {
     
     main:
         // 1. Assembly-based pipeline
-        shasta( fastq, params.shasta_config )
+        shasta( fastq )
         // assembly_polishing( shasta.out.assembly, fastq)
 
         // minimap_align_bamout( assembly_polishing.out.polished_assembly, fastq )
@@ -366,8 +366,6 @@ workflow reference_based_variant_calling {
         // samtobam( minimap.out.mapped_sam, genomeref )
         minimap_align_bamout( genomeref, fastq )
 
-        call_svs( genomeref, minimap_align_bamout.out.bam, minimap_align_bamout.out.idx )
-
         // note that on the current VSC system (P100 and V100 nodes) GPU nodes
         // lack sufficient memory to run PEPPER-DeepVariant genome-wide
         // the current if statement reflects that and splits up the genome by chromosome to run as separate jobs
@@ -377,11 +375,15 @@ workflow reference_based_variant_calling {
             deepvariant( minimap_align_bamout.out.bam, minimap_align_bamout.out.idx, genomeref )
         // }
 
+        call_svs( genomeref, deepvariant.out.haplotagged_bam, deepvariant.out.haplotagged_bam_idx )
+
+
     emit:
         svs = call_svs.out.consensus
         snvs = deepvariant.out.indel_snv_vcf
         snvs_idx = deepvariant.out.indel_snv_vcf_index
         haplotagged_bam = deepvariant.out.haplotagged_bam
+        haplotagged_bam_idx = deepvariant.out.haplotagged_bam_idx
 
 }
 

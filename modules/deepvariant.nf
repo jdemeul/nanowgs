@@ -28,6 +28,8 @@ process deepvariant_snv_calling {
     path "deepvar_out/*phased.vcf.gz.tbi", emit: indel_snv_vcf_index
     path "deepvar_out/intermediate_files"
     path "deepvar_out/*.haplotagged.bam", emit: haplotagged_bam
+    path "deepvar_out/*.haplotagged.bam.bai", emit: haplotagged_bam_idx
+    path "deepvar_out/*stats"
 
     script:
     if ( params.deepvariant_with_gpu ) 
@@ -56,6 +58,10 @@ process deepvariant_snv_calling {
             -t 36 \
             --ont_r9_guppy5_sup \
             --phased_output
+        samtools index -b -@ 18 ./deepvar_out/${params.sampleid}.haplotagged.bam ./deepvar_out/${params.sampleid}.haplotagged.bam.bai
+        samtools flagstat ./deepvar_out/${params.sampleid}.haplotagged.bam > ./deepvar_out/${params.sampleid}.haplotagged.bam.flagstats
+        samtools idxstats ./deepvar_out/${params.sampleid}.haplotagged.bam > ./deepvar_out/${params.sampleid}.haplotagged.bam.idxstats
+        # samtools stats ${params.sampleid}_sorted.bam > ${params.sampleid}_sorted.bam.stats
         """
 }
 
@@ -93,6 +99,7 @@ process deepvariant_snv_calling_gpu_parallel {
         -g \
         --phased_output \
         --region $region
+    samtools index -b -@ 9 *.haplotagged.bam
     """
 }
 

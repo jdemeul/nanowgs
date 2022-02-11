@@ -13,22 +13,26 @@ process sniffles_sv_calling {
     input:
     path sorted_bam
     path bam_index
+    path reference
     // val step
 
     output:
-    path "*_sniffles_svs.vcf", emit: sv_calls
+    path "*_sniffles_svs.vcf.gz", emit: sv_calls
+    path "*_sniffles_svs.vcf.gz.tbi", emit: sv_calls_idx
+    path "*_sniffles_svs.snf"
 
     script:
     """
-    sniffles --minmapping_qual ${params.sv_min_mapq} \
-        --min_support ${params.sv_min_support} \
-        --cluster \
-        --min_length ${params.sv_min_size} \
-        --num_reads_report -1 \
-        --threads $task.cpus \
-        --tmp_file ./working_dir \
-        -m $sorted_bam \
-        -v ${params.sampleid}_sniffles_svs.vcf
+    sniffles --threads $task.cpus \
+        --input $sorted_bam \
+        --vcf ${params.sampleid}_sniffles_svs.vcf.gz \
+        --snf ${params.sampleid}_sniffles_svs.snf \
+        --tandem-repeats ${params.tandem_repeats} \
+        --minsvlen ${params.sv_min_size} \
+        --phase \
+        --reference $reference
+        # -- non-germline
+        # --mapq ${params.sv_min_mapq}
     """
 
 }
