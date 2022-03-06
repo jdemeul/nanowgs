@@ -427,7 +427,9 @@ workflow {
     process_reads( genomeref, ont_base )
 
     // start megalodon
-    megalodon( genomeref, ont_base )
+    if ( params.megalodon_recall ) {
+        megalodon( genomeref, ont_base )
+    }
 
     // assembly based variant calling
     assembly_based_variant_calling( process_reads.out.fastq_trimmed )
@@ -441,7 +443,12 @@ workflow {
     // minimap_alignment_snv_calling( process_reads.out.fastq_trimmed, genomeref )
 
     get_haplotype_readids( reference_based_variant_calling.out.haplotagged_bam )
-    megalodon_aggregate( megalodon.out.megalodon_results, get_haplotype_readids.out.hap1ids, get_haplotype_readids.out.hap2ids )
+
+    if ( params.megalodon_recall ) {
+        megalodon_aggregate( megalodon.out.megalodon_results, get_haplotype_readids.out.hap1ids, get_haplotype_readids.out.hap2ids )
+    } else if ( params.megalodon_dir ) {
+        megalodon_aggregate( Channel.fromPath( params.megalodon_dir, checkIfExists: true  ), get_haplotype_readids.out.hap1ids, get_haplotype_readids.out.hap2ids )
+    }
 
 }
 

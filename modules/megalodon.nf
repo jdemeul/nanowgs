@@ -27,7 +27,7 @@ process megalodon {
             --guppy-params "-d /rerio/basecall_models/" \
             --guppy-config ${params.megalodon_model} \
             --reference $genomeref \
-            --outputs basecalls mod_mappings per_read_mods \
+            --outputs mod_mappings per_read_mods \
             --mappings-format bam \
             --mod-motif ${params.megalodon_modmotif} \
             --mod-motif ${params.megalodon_modmotif2} \
@@ -49,7 +49,7 @@ process megalodon {
             --guppy-params "-d /rerio/basecall_models/" \
             --guppy-config ${params.megalodon_model} \
             --reference $genomeref \
-            --outputs basecalls mod_mappings per_read_mods \
+            --outputs mod_mappings per_read_mods \
             --mappings-format bam \
             --mod-motif ${params.megalodon_modmotif} \
             --processes 16 \
