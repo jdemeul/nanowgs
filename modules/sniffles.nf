@@ -29,9 +29,11 @@ process sniffles_sv_calling {
         --snf ${params.sampleid}_sniffles_svs.snf \
         --tandem-repeats ${params.tandem_repeats} \
         --minsvlen ${params.sv_min_size} \
+        --minsupport ${params.sv_min_support} \
         --phase \
-        --reference $reference
-        # -- non-germline
+        --reference $reference \
+        --output-rnames
+        # --non-germline
         # --mapq ${params.sv_min_mapq}
     """
 

@@ -26,11 +26,11 @@ process dysgu_sv_calling {
         --diploid True \
         --min-support ${params.sv_min_support} \
         --min-size ${params.sv_min_size} \
-        --max-cov auto \
+        --max-cov -1 \
         --mq ${params.sv_min_mapq} \
         -o ./${params.sampleid}_dysgu_svs.vcf \
         -p $task.cpus \
-        -c \
+        --metrics \
         $reference \
         ./dysgu/ \
         $sorted_bam

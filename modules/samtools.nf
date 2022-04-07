@@ -20,7 +20,7 @@ process sam_to_sorted_bam {
     output:
     path "*.bam", emit: sorted_bam
     path "*.bai", emit: bam_index
-    // path "*stats"
+    path "*stats"
 
     script:
     def samtools_mem = Math.floor(task.memory.getMega() / task.cpus ) as int
@@ -32,9 +32,9 @@ process sam_to_sorted_bam {
         --reference $genomeref \
         -T sorttmp_${params.sampleid}_sorted \
         $mapped_sam
-    # samtools flagstat ${params.sampleid}_sorted.bam > ${params.sampleid}_sorted.bam.flagstats
-    # samtools idxstats ${params.sampleid}_sorted.bam > ${params.sampleid}_sorted.bam.idxstats
-    # samtools stats ${params.sampleid}_sorted.bam > ${params.sampleid}_sorted.bam.stats
+    samtools flagstat ${params.sampleid}_sorted.bam > ${params.sampleid}_sorted.bam.flagstats
+    samtools idxstats ${params.sampleid}_sorted.bam > ${params.sampleid}_sorted.bam.idxstats
+    samtools stats ${params.sampleid}_sorted.bam > ${params.sampleid}_sorted.bam.stats
     """
 
 }

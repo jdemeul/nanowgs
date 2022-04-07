@@ -23,8 +23,11 @@ include { sam_to_sorted_bam as samtobam; get_haplotype_readids; index_bam } from
 include { sniffles_sv_calling as sniffles } from './modules/sniffles'
 include { svim_sv_calling as svim } from './modules/svim'
 include { cutesv_sv_calling as cutesv } from './modules/cutesv'
-include { svim_sv_filtering as filtersvim } from './modules/bcftools'
+include { dysgu_sv_calling as dysgu } from './modules/dysgu'
+include { svim_sv_filtering as filtersvim; variant_filtering as filter_deepvar } from './modules/bcftools'
 include { vcf_concat } from './modules/bcftools'
+
+include { longphase_phase; longphase_tag } from './modules/longphase'
 
 include { survivor_sv_consensus as survivor } from './modules/survivor'
 
@@ -88,6 +91,7 @@ workflow call_svs {
         sniffles( bam, bam_index, genomeref )
         svim( bam, bam_index, genomeref )
         filtersvim( svim.out.sv_calls )
+        dysgu( bam, bam_index, genomeref )
 
         allsvs = cutesv.out.sv_calls
                     .mix( sniffles.out.sv_calls, filtersvim.out.sv_calls_q10 )
@@ -399,7 +403,7 @@ workflow haploid_to_diploid_assembly {
 
         hapdup( minimap_align_bamout.out.bam, minimap_align_bamout.out.idx, haploid_assembly )
 
-        dipdiff( haploid_assembly, hapdup.out.hap1, hapdup.out.hap2 )
+        // dipdiff( haploid_assembly, hapdup.out.hap1, hapdup.out.hap2 )
         dipdiff_reference( reference, hapdup.out.hap1, hapdup.out.hap2 )
 
 }
@@ -413,6 +417,34 @@ workflow haploid_to_diploid_assembly {
 //     main:
 //         megalodon( genomeref, ont_base )
 // }
+
+workflow wgs_analysis_fastq {
+
+    genomeref = Channel.fromPath( params.genomeref, checkIfExists: true  )
+    ont_base = Channel.fromPath( params.ont_base_dir, checkIfExists: true )
+
+    // process reads
+    process_reads( genomeref, ont_base )
+
+    // assembly based variant calling
+    shasta( process_reads.out.fastq_trimmed )
+
+    // 2. Reference alignment-based pipeline
+    minimap_align_bamout( genomeref, process_reads.out.fastq_trimmed )
+
+    deepvariant( minimap_align_bamout.out.bam, minimap_align_bamout.out.idx, genomeref )
+    filter_deepvar( deepvariant.out.indel_snv_vcf )
+    
+    sniffles( minimap_align_bamout.out.bam, minimap_align_bamout.out.idx, genomeref )
+
+    longphase_phase( genomeref, filter_deepvar.out.variants_pass, sniffles.out.sv_calls, minimap_align_bamout.out.bam, minimap_align_bamout.out.idx )
+    longphase_tag( filter_deepvar.out.variants_pass, sniffles.out.sv_calls, minimap_align_bamout.out.bam, minimap_align_bamout.out.idx )
+
+    // snv_indel = reference_based_variant_calling.out.snvs
+    // haploid_to_diploid_assembly( process_reads.out.fastq_trimmed, genomeref, shasta.out.assembly )
+    // get_haplotype_readids( reference_based_variant_calling.out.haplotagged_bam )
+
+}
 
 
 workflow {
