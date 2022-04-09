@@ -8,7 +8,7 @@ process sam_to_sorted_bam {
     label 'time_mid'
     label 'samtools'
 
-    // publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
+    publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
     // publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy',
     //            saveAs: { item -> item.matches("(.*)stats") ? item : null }
 
@@ -18,8 +18,8 @@ process sam_to_sorted_bam {
     // val aligner
 
     output:
-    path "*.bam", emit: sorted_bam
-    path "*.bai", emit: bam_index
+    path "${params.sampleid}_sorted.bam", emit: sorted_bam
+    path "${params.sampleid}_sorted.bam.bai", emit: bam_index
     path "*stats"
 
     script:
@@ -33,8 +33,8 @@ process sam_to_sorted_bam {
         -T sorttmp_${params.sampleid}_sorted \
         $mapped_sam
     samtools flagstat ${params.sampleid}_sorted.bam > ${params.sampleid}_sorted.bam.flagstats
-    samtools idxstats ${params.sampleid}_sorted.bam > ${params.sampleid}_sorted.bam.idxstats
-    samtools stats ${params.sampleid}_sorted.bam > ${params.sampleid}_sorted.bam.stats
+    samtools idxstats -@ 4 ${params.sampleid}_sorted.bam > ${params.sampleid}_sorted.bam.idxstats
+    samtools stats -@ 4 ${params.sampleid}_sorted.bam > ${params.sampleid}_sorted.bam.stats
     """
 
 }

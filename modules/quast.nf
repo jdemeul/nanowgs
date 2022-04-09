@@ -3,8 +3,8 @@
 * Assess a de novo genome assembly using Quast
 */
 process run_quast {
-    label 'cpu_high'
-    label 'mem_high'
+    label 'cpu_mid'
+    label 'mem_mid'
     label 'time_mid'
     label 'quast'
 
@@ -13,23 +13,24 @@ process run_quast {
     input:
     path assembly
     path refgenome
-    path refgeneannot
-    path ref_bam
+    val haplotype
+    // path ref_bam
+    // path refgeneannot
 
     output:
-    path "quast_output"
+    path "${haplotype}"
 
     script:
     """
     quast.py \
         $assembly \
         -r $refgenome \
-        -g gene:$refgeneannot \
         -t $task.cpus \
         --large \
         --k-mer-stats \
-        --ref-bam $ref_bam \
-        -o quast_output
+        -o $haplotype
+    #    --ref-bam $ref_bam \
+    #    -g gene:$refgeneannot \
     """
 }
 

@@ -14,7 +14,7 @@ process filter_reads {
     path fastqs
 
     output:
-    path "*_trimmed.fastq", emit: fastq_trimmed
+    path "${params.sampleid}_trimmed.fastq", emit: fastq_trimmed
     path "fastp*"
 
     script:

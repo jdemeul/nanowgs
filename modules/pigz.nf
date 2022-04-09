@@ -14,7 +14,7 @@ process parallel_gzip {
     path fastq
 
     output:
-    path "*.gz", emit: fastqgz
+    path "${params.sampleid}.gz", emit: fastqgz
 
     script:
     """
@@ -22,6 +22,6 @@ process parallel_gzip {
         --best \
         --stdout \
         --processes $task.cpus \
-        $fastq > ${fastq}.gz
+        $fastq > ${params.sampleid}.gz
     """
 }

@@ -24,10 +24,11 @@ include { sniffles_sv_calling as sniffles } from './modules/sniffles'
 include { svim_sv_calling as svim } from './modules/svim'
 include { cutesv_sv_calling as cutesv } from './modules/cutesv'
 include { dysgu_sv_calling as dysgu } from './modules/dysgu'
-include { svim_sv_filtering as filtersvim; variant_filtering as filter_deepvar } from './modules/bcftools'
-include { vcf_concat } from './modules/bcftools'
+include { svim_sv_filtering as filtersvim; sniffles_sv_filtering as filtersniffles; variant_filtering as filter_deepvar } from './modules/bcftools'
+include { vcf_concat; vcf_concat_sv_snv as merge_sv_snv } from './modules/bcftools'
 
 include { longphase_phase; longphase_tag } from './modules/longphase'
+include { seqtk } from './modules/seqtk'
 
 include { survivor_sv_consensus as survivor } from './modules/survivor'
 
@@ -42,11 +43,18 @@ include { racon_assembly_polishing as racon } from './modules/racon'
 include { medaka_assembly_polishing as medaka_polish } from './modules/medaka'
 include { medaka_assembly_polish_align; medaka_assembly_polish_stitch; medaka_assembly_polish_consensus } from './modules/medaka'
 
-include { hapdup } from './modules/hapdup'
+include { hapdup; hapdup_with_haptagged_bam as hapduptagged; haptagtransfer } from './modules/hapdup'
+include { flye_polishing as flye_hap1; flye_polishing as flye_hap2 } from './modules/flye'
+
 include { dipdiff } from './modules/dipdiff'
 include { dipdiff as dipdiff_reference } from './modules/dipdiff'
 
-include { create_lra_index; lra_alignment } from './modules/lra'
+include { create_personal_genome as crossstitch } from './modules/crossstitch'
+
+include { run_quast as quast_hap1; run_quast as quast_hap2 } from './modules/quast'
+include { run_mummer as mummer_hap1; run_mummer as mummer_hap2 } from './modules/mummer'
+
+// include { create_lra_index; lra_alignment } from './modules/lra'
 
 
 
@@ -408,6 +416,7 @@ workflow haploid_to_diploid_assembly {
 
 }
 
+
 // workflow phased_methylation_calls {
 //     take:
 //         ont_base
@@ -426,9 +435,6 @@ workflow wgs_analysis_fastq {
     // process reads
     process_reads( genomeref, ont_base )
 
-    // assembly based variant calling
-    shasta( process_reads.out.fastq_trimmed )
-
     // 2. Reference alignment-based pipeline
     minimap_align_bamout( genomeref, process_reads.out.fastq_trimmed )
 
@@ -436,12 +442,27 @@ workflow wgs_analysis_fastq {
     filter_deepvar( deepvariant.out.indel_snv_vcf )
     
     sniffles( minimap_align_bamout.out.bam, minimap_align_bamout.out.idx, genomeref )
+    filtersniffles( sniffles.out.sv_calls )
 
-    longphase_phase( genomeref, filter_deepvar.out.variants_pass, sniffles.out.sv_calls, minimap_align_bamout.out.bam, minimap_align_bamout.out.idx )
-    longphase_tag( filter_deepvar.out.variants_pass, sniffles.out.sv_calls, minimap_align_bamout.out.bam, minimap_align_bamout.out.idx )
+    longphase_phase( genomeref, filter_deepvar.out.variants_pass, filtersniffles.out.variants_pass, minimap_align_bamout.out.bam, minimap_align_bamout.out.idx )
+    longphase_tag( longphase_phase.out.snv_indel_phased, longphase_phase.out.sv_phased, minimap_align_bamout.out.bam, minimap_align_bamout.out.idx )
 
+    // seqtk( longphase_tag.out.hap1ids, longphase_tag.out.hap2ids, process_reads.out.fastq_trimmed )
+    crossstitch( longphase_phase.out.snv_indel_phased, longphase_phase.out.sv_phased, genomeref, params.karyotype )
+
+    // de novo assembly using shasta
+    shasta( process_reads.out.fastq_trimmed )
+    // use reference-based haplotype tags to assure assembly-based haplotypes match reference-based ones
+    haptagtransfer( longphase_tag.out.haplotagged_bam, shasta.out.assembly )
+    hapduptagged( haptagtransfer.out.retagged_bam, haptagtransfer.out.retagged_bamindex, shasta.out.assembly )
+
+    quast_hap1( hapduptagged.out.hap1, crossstitch.out.hap1, "hap1" )
+    quast_hap2( hapduptagged.out.hap2, crossstitch.out.hap2, "hap2" )
+
+    mummer_hap1( hapduptagged.out.hap1, crossstitch.out.hap1, "hap1" )
+    mummer_hap2( hapduptagged.out.hap2, crossstitch.out.hap2, "hap2" )
     // snv_indel = reference_based_variant_calling.out.snvs
-    // haploid_to_diploid_assembly( process_reads.out.fastq_trimmed, genomeref, shasta.out.assembly )
+    
     // get_haplotype_readids( reference_based_variant_calling.out.haplotagged_bam )
 
 }
