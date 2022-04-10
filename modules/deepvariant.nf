@@ -7,6 +7,7 @@ process deepvariant_snv_calling {
     label 'deepvariant'
     // memory requirements are forcing this to be run on a bigmem node / superdome
     label ( params.deepvariant_with_gpu ? 'with_gpus': 'bigmemnode' )
+    label ( workflow.profile.contains('qsub') ? null: 'cpu_high' )
     // label ( params.with_gpu ? null: 'mem_high' )
     // label ( params.with_gpu ? null: 'time_high' )
 
@@ -32,6 +33,7 @@ process deepvariant_snv_calling {
     // path "deepvar_out/*stats"
 
     script:
+    def localproc = ( workflow.profile.contains('qsub') ? 36: task.cpus )
     if ( params.deepvariant_with_gpu ) 
         """
         # export CUDA_VISIBLE_DEVICES=${params.gpu_devices}
@@ -55,7 +57,7 @@ process deepvariant_snv_calling {
             -o deepvar_out \
             -p ${params.sampleid} \
             -s ${params.sampleid} \
-            -t 36 \
+            -t ${localproc} \
             --ont_r9_guppy5_sup
         #    --phased_output
         # samtools index -b -@ 18 ./deepvar_out/${params.sampleid}.haplotagged.bam ./deepvar_out/${params.sampleid}.haplotagged.bam.bai

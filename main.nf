@@ -49,10 +49,10 @@ include { flye_polishing as flye_hap1; flye_polishing as flye_hap2 } from './mod
 include { dipdiff } from './modules/dipdiff'
 include { dipdiff as dipdiff_reference } from './modules/dipdiff'
 
-include { create_personal_genome as crossstitch } from './modules/crossstitch'
+include { create_personal_genome as crossstitch; prepare_svs_stitch } from './modules/crossstitch'
 
-include { run_quast as quast_hap1; run_quast as quast_hap2 } from './modules/quast'
-include { run_mummer as mummer_hap1; run_mummer as mummer_hap2 } from './modules/mummer'
+include { run_quast as quast_hap1; run_quast as quast_hap2; run_quast as quast_hap1_ref; run_quast as quast_hap2_ref } from './modules/quast'
+include { run_mummer as mummer_hap1; run_mummer as mummer_hap2; run_mummer as mummer_hap1_ref; run_mummer as mummer_hap2_ref } from './modules/mummer'
 
 // include { create_lra_index; lra_alignment } from './modules/lra'
 
@@ -448,7 +448,9 @@ workflow wgs_analysis_fastq {
     longphase_tag( longphase_phase.out.snv_indel_phased, longphase_phase.out.sv_phased, minimap_align_bamout.out.bam, minimap_align_bamout.out.idx )
 
     // seqtk( longphase_tag.out.hap1ids, longphase_tag.out.hap2ids, process_reads.out.fastq_trimmed )
-    crossstitch( longphase_phase.out.snv_indel_phased, longphase_phase.out.sv_phased, genomeref, params.karyotype )
+    // prepare_svs_stitch( longphase_phase.out.sv_phased, genomeref )
+    // crossstitch( longphase_phase.out.snv_indel_phased, prepare_svs_stitch.out.fixed_svs, genomeref, params.karyotype )
+    crossstitch( longphase_phase.out.snv_indel_phased, filtersniffles.out.variants_pass, minimap_align_bamout.out.bam, genomeref, params.karyotype )
 
     // de novo assembly using shasta
     shasta( process_reads.out.fastq_trimmed )
@@ -456,11 +458,15 @@ workflow wgs_analysis_fastq {
     haptagtransfer( longphase_tag.out.haplotagged_bam, shasta.out.assembly )
     hapduptagged( haptagtransfer.out.retagged_bam, haptagtransfer.out.retagged_bamindex, shasta.out.assembly )
 
-    quast_hap1( hapduptagged.out.hap1, crossstitch.out.hap1, "hap1" )
-    quast_hap2( hapduptagged.out.hap2, crossstitch.out.hap2, "hap2" )
+    quast_hap1( genomeref, hapduptagged.out.hap1, "hap1" )
+    // quast_hap1_ref( genomeref, crossstitch.out.hap1, "hap1" )
+    quast_hap2( genomeref, hapduptagged.out.hap2, "hap2" )
+    // quast_hap2_ref( genomeref, crossstitch.out.hap2, "hap2" )
 
-    mummer_hap1( hapduptagged.out.hap1, crossstitch.out.hap1, "hap1" )
-    mummer_hap2( hapduptagged.out.hap2, crossstitch.out.hap2, "hap2" )
+    mummer_hap1( genomeref, hapduptagged.out.hap1, "hap1" )
+    // mummer_hap2( genomeref, hapduptagged.out.hap2, "hap2" )
+    mummer_hap1_ref( genomeref, crossstitch.out.hap1, "hap1" )
+    // mummer_hap2_ref( genomeref, crossstitch.out.hap2, "hap2" )
     // snv_indel = reference_based_variant_calling.out.snvs
     
     // get_haplotype_readids( reference_based_variant_calling.out.haplotagged_bam )

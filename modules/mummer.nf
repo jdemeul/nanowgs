@@ -11,8 +11,8 @@ process run_mummer {
     publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'
 
     input:
-    path guidedassembly
     path denovoassembly
+    path guidedassembly
     val haplotype
     // path ref_bam
     // path refgeneannot

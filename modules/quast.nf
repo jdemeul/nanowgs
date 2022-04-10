@@ -29,8 +29,9 @@ process run_quast {
         --large \
         --k-mer-stats \
         -o $haplotype
-    #    --ref-bam $ref_bam \
-    #    -g gene:$refgeneannot \
+    #    --no-check \
+    #    --ref-bam ref_bam \
+    #    -g gene:refgeneannot \
     """
 }
 

@@ -45,7 +45,8 @@ process sniffles_sv_filtering {
 
     script:
     """
-    bcftools view -f "PASS" -o ${svs.getSimpleName()}_PASS.vcf $svs
+    bcftools index ${svs}
+    bcftools view -f "PASS" -o ${svs.getSimpleName()}_PASS.vcf $svs $params.subset_calls
     bcftools stats ${svs.getSimpleName()}_PASS.vcf > ./${svs.getSimpleName()}_PASS.vchk
     """
 }
@@ -80,7 +81,8 @@ process variant_filtering {
 
     script:
     """
-    bcftools view -f "PASS" -e 'ILEN >= 30 | ILEN <= -30' --trim-alt-alleles -o ${variants.getSimpleName()}_PASS.vcf $variants
+    bcftools index ${variants}
+    bcftools view -f "PASS" -e 'ILEN >= 30 | ILEN <= -30' --trim-alt-alleles -o ${variants.getSimpleName()}_PASS.vcf $variants $params.subset_calls
     bcftools stats ${variants.getSimpleName()}_PASS.vcf > ./${variants.getSimpleName()}_PASS.vchk
     """
 }

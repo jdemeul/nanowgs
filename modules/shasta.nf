@@ -19,6 +19,7 @@ process run_shasta_assembly {
     path "shasta_assembly"
 
     script:
+    def localproc = ( workflow.profile.contains('qsub') ? 0: task.cpus )
     if( params.shasta_minreadlength )
         """
         if [[ $fastq == *.gz ]]; then 
@@ -31,6 +32,7 @@ process run_shasta_assembly {
             --config /shastaconf/conf/${params.shasta_config} \
             --input uncompressed_reads.fq \
             --assemblyDirectory ./shasta_assembly \
+            --threads ${localproc} \
             --Reads.minReadLength ${params.shasta_minreadlength}
         
         if [ -f ./shasta_assembly/Assembly-Haploid.fasta ]
@@ -48,7 +50,8 @@ process run_shasta_assembly {
         shasta \
             --config /shastaconf/conf/${params.shasta_config} \
             --input uncompressed_reads.fq \
-            --assemblyDirectory ./shasta_assembly
+            --assemblyDirectory ./shasta_assembly \
+            --threads ${localproc}
         
         if [ -f ./shasta_assembly/Assembly-Haploid.fasta ]
         then mv ./shasta_assembly/Assembly-Haploid.fasta ./shasta_assembly/Assembly.fasta
@@ -78,12 +81,14 @@ process run_shasta_assembly_haploid {
     path "${haplotype}"
 
     script:
+    def localproc = ( workflow.profile.contains('qsub') ? 0: task.cpus )
     if( params.shasta_minreadlength )
         """
         shasta \
             --config /shastaconf/conf/${params.shasta_config_haploid} \
             --input $hapreads \
             --assemblyDirectory $haplotype \
+            --threads ${localproc} \
             --Reads.minReadLength ${params.shasta_minreadlength}
         """
     else
@@ -91,7 +96,8 @@ process run_shasta_assembly_haploid {
         shasta \
             --config /shastaconf/conf/${params.shasta_config_haploid} \
             --input $hapreads \
-            --assemblyDirectory $haplotype
+            --assemblyDirectory $haplotype \
+            --threads ${localproc}
         """
 }
 
