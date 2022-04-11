@@ -27,13 +27,13 @@ process dysgu_sv_calling {
         --min-support ${params.sv_min_support} \
         --min-size ${params.sv_min_size} \
         --max-cov -1 \
-        --mq ${params.sv_min_mapq} \
         -o ./${params.sampleid}_dysgu_svs.vcf \
         -p $task.cpus \
         --metrics \
         $reference \
         ./dysgu/ \
         $sorted_bam
+    #    --mq ${params.sv_min_mapq} \
     """
 
 }

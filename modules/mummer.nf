@@ -4,8 +4,8 @@
 */
 process run_mummer {
     label 'cpu_low'
-    label 'mem_low'
-    label 'time_low'
+    label 'mem_high'
+    label 'time_mid'
     label 'mummer'
 
     publishDir path: "${params.outdir}/${params.sampleid}/${task.process}/", mode: 'copy'

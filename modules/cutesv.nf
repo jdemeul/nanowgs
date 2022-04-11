@@ -23,7 +23,6 @@ process cutesv_sv_calling {
     script:
     """
     cuteSV --min_support ${params.sv_min_support} \
-        --min_mapq ${params.sv_min_mapq} \
         --report_readid \
         --max_cluster_bias_INS 100 \
         --diff_ratio_merging_INS 0.3 \
@@ -41,6 +40,7 @@ process cutesv_sv_calling {
         $genomeref \
         ${params.sampleid}_cuteSV_svs.vcf \
         `pwd`
+        # --min_mapq ${params.sv_min_mapq} \
     """
 
 }

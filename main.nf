@@ -458,14 +458,14 @@ workflow wgs_analysis_fastq {
     haptagtransfer( longphase_tag.out.haplotagged_bam, shasta.out.assembly )
     hapduptagged( haptagtransfer.out.retagged_bam, haptagtransfer.out.retagged_bamindex, shasta.out.assembly )
 
-    quast_hap1( genomeref, hapduptagged.out.hap1, "hap1" )
+    // quast_hap1( genomeref, hapduptagged.out.hap1, "hap1" )
     // quast_hap1_ref( genomeref, crossstitch.out.hap1, "hap1" )
-    quast_hap2( genomeref, hapduptagged.out.hap2, "hap2" )
+    // quast_hap2( genomeref, hapduptagged.out.hap2, "hap2" )
     // quast_hap2_ref( genomeref, crossstitch.out.hap2, "hap2" )
 
-    mummer_hap1( genomeref, hapduptagged.out.hap1, "hap1" )
+    // mummer_hap1( genomeref, hapduptagged.out.hap1, "hap1" )
     // mummer_hap2( genomeref, hapduptagged.out.hap2, "hap2" )
-    mummer_hap1_ref( genomeref, crossstitch.out.hap1, "hap1" )
+    // mummer_hap1_ref( genomeref, crossstitch.out.hap1, "hap1" )
     // mummer_hap2_ref( genomeref, crossstitch.out.hap2, "hap2" )
     // snv_indel = reference_based_variant_calling.out.snvs
     
